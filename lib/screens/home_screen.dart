@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:trueway_ecommerce/screens/categories_screen.dart';
-import 'package:trueway_ecommerce/screens/profile_screen.dart';
+import 'package:trueway_ecommerce/screens/cart_screen.dart';
 import '../services/product_service.dart';
 import 'product_details_screen.dart';
-import 'cart_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -12,70 +10,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0;
-
-  final List<Widget> _screens = [
-    HomeContent(),
-    CategoriesScreen(),
-    CartScreen(),
-    ProfileScreen(),
-  ];
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text("Trueway Store"),
-        actions: [
-          IconButton(icon: Icon(Icons.search), onPressed: () {}),
-          IconButton(
-            icon: Icon(Icons.shopping_cart),
-            onPressed: () {
-              setState(() {
-                _selectedIndex = 2;
-              });
-            },
-          ),
-        ],
-      ),
-      body: _screens[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        items: [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.category),
-            label: "Categories",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_cart),
-            label: "Cart",
-          ),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
-        ],
-        selectedItemColor: Colors.orange,
-        unselectedItemColor: Colors.grey,
-        type: BottomNavigationBarType.fixed,
-      ),
-    );
-  }
-}
-
-class HomeContent extends StatefulWidget {
-  @override
-  _HomeContentState createState() => _HomeContentState();
-}
-
-class _HomeContentState extends State<HomeContent> {
   final ProductService productService = ProductService();
   List products = [];
+  List recentlyViewedProducts = [];
+  List popularProducts = []; // Fetch from API if available
   bool isLoading = true;
 
   @override
@@ -97,25 +35,54 @@ class _HomeContentState extends State<HomeContent> {
     }
   }
 
+  void addToRecentlyViewed(Map product) {
+    setState(() {
+      if (!recentlyViewedProducts.contains(product)) {
+        recentlyViewedProducts.insert(0, product); // Add at the start
+        if (recentlyViewedProducts.length > 10) {
+          recentlyViewedProducts.removeLast(); // Limit to 10
+        }
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return isLoading
-        ? Center(child: CircularProgressIndicator())
-        : SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildBanner(),
-              _buildCategorySection(),
-              _buildSectionTitle("Newly Launched"),
-              _buildProductGrid(),
-              _buildSectionTitle("Recently Viewed"),
-              _buildProductGrid(),
-              _buildSectionTitle("Most Popular"),
-              _buildProductGrid(),
-            ],
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Trueway Store"),
+        actions: [
+          IconButton(icon: Icon(Icons.search), onPressed: () {}),
+          IconButton(
+            icon: Icon(Icons.shopping_cart),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => CartScreen()),
+              );
+            },
           ),
-        );
+        ],
+      ),
+      body:
+          isLoading
+              ? Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildBanner(),
+                    _buildCategorySection(),
+                    _buildSectionTitle("Newly Launched"),
+                    _buildProductGrid(products),
+                    _buildSectionTitle("Recently Viewed"),
+                    _buildProductGrid(recentlyViewedProducts),
+                    _buildSectionTitle("Most Popular"),
+                    _buildProductGrid(popularProducts),
+                  ],
+                ),
+              ),
+    );
   }
 
   Widget _buildBanner() {
@@ -139,28 +106,41 @@ class _HomeContentState extends State<HomeContent> {
       {"icon": "https://via.placeholder.com/50", "name": "Oil & Ghee"},
       {"icon": "https://via.placeholder.com/50", "name": "Pulses"},
       {"icon": "https://via.placeholder.com/50", "name": "Fruits"},
+      {"icon": "https://via.placeholder.com/50", "name": "Vegetables"},
+      {"icon": "https://via.placeholder.com/50", "name": "Milk"},
+      {"icon": "https://via.placeholder.com/50", "name": "Oil & Ghee"},
+      {"icon": "https://via.placeholder.com/50", "name": "Pulses"},
+      {"icon": "https://via.placeholder.com/50", "name": "Fruits"},
+      {"icon": "https://via.placeholder.com/50", "name": "Vegetables"},
     ];
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children:
-            categories.map((category) {
-              return Column(
-                children: [
-                  Image.network(
-                    category["icon"]!,
-                    width: 50,
-                    height: 50,
-                    errorBuilder:
-                        (context, error, stackTrace) => Icon(Icons.error),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children:
+              categories.map((category) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                  ), // Spacing between icons
+                  child: Column(
+                    children: [
+                      Image.network(
+                        category["icon"]!,
+                        width: 50,
+                        height: 50,
+                        errorBuilder:
+                            (context, error, stackTrace) => Icon(Icons.error),
+                      ),
+                      SizedBox(height: 5),
+                      Text(category["name"]!, style: TextStyle(fontSize: 12)),
+                    ],
                   ),
-                  SizedBox(height: 5),
-                  Text(category["name"]!, style: TextStyle(fontSize: 12)),
-                ],
-              );
-            }).toList(),
+                );
+              }).toList(),
+        ),
       ),
     );
   }
@@ -181,7 +161,7 @@ class _HomeContentState extends State<HomeContent> {
     );
   }
 
-  Widget _buildProductGrid() {
+  Widget _buildProductGrid(List products) {
     return Container(
       height: 250,
       padding: EdgeInsets.symmetric(horizontal: 10),
@@ -206,6 +186,7 @@ class _HomeContentState extends State<HomeContent> {
 
     return GestureDetector(
       onTap: () {
+        addToRecentlyViewed(product);
         Navigator.push(
           context,
           MaterialPageRoute(

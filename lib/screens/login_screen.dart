@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:trueway_ecommerce/screens/home_screen.dart';
+import 'package:trueway_ecommerce/main.dart';
 import 'signup_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
@@ -34,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (response != null) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => HomeScreen()),
+          MaterialPageRoute(builder: (context) => MainScreen()),
         );
       } else {
         ScaffoldMessenger.of(
