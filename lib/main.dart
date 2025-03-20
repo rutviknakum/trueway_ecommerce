@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:trueway_ecommerce/screens/Setting_screen.dart';
+import 'package:trueway_ecommerce/screens/Wishlist.dart';
+import 'package:trueway_ecommerce/screens/categories_screen.dart';
 import 'package:trueway_ecommerce/screens/home_screen.dart';
 import 'package:trueway_ecommerce/screens/cart_screen.dart';
-import 'package:trueway_ecommerce/screens/profile_screen.dart';
-import 'package:trueway_ecommerce/screens/splash_screen.dart';
 import 'package:trueway_ecommerce/widgets/bottom_navigation_bar.dart';
 import 'providers/cart_provider.dart';
 
@@ -16,10 +17,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [ChangeNotifierProvider(create: (context) => CartProvider())],
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: SplashScreen(),
-      ),
+      child: MaterialApp(debugShowCheckedModeBanner: false, home: MainScreen()),
     );
   }
 }
@@ -32,7 +30,13 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = [HomeScreen(), ProfileScreen(), CartScreen()];
+  final List<Widget> _screens = [
+    HomeScreen(),
+    categories_screen(),
+    CartScreen(),
+    WishlistScreen(wishlist: []),
+    SettingScreen(),
+  ];
 
   void _onItemTapped(int index) {
     setState(() {
