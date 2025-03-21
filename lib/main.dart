@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:trueway_ecommerce/providers/wishlist_provider.dart';
 import 'package:trueway_ecommerce/screens/Setting_screen.dart';
-import 'package:trueway_ecommerce/screens/Wishlist.dart';
+import 'package:trueway_ecommerce/screens/WishlistScreen.dart';
 import 'package:trueway_ecommerce/screens/categories_screen.dart';
 import 'package:trueway_ecommerce/screens/home_screen.dart';
 import 'package:trueway_ecommerce/screens/cart_screen.dart';
@@ -16,7 +17,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [ChangeNotifierProvider(create: (context) => CartProvider())],
+      providers: [
+        ChangeNotifierProvider(create: (context) => CartProvider()),
+        ChangeNotifierProvider(create: (context) => WishlistProvider()),
+      ],
       child: MaterialApp(debugShowCheckedModeBanner: false, home: MainScreen()),
     );
   }
@@ -29,14 +33,25 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
+  List<Map<String, dynamic>> wishlist = []; // Store wishlist in MainScreen
 
-  final List<Widget> _screens = [
-    HomeScreen(),
-    categories_screen(),
-    CartScreen(),
-    WishlistScreen(wishlist: []),
-    SettingScreen(),
-  ];
+  void toggleWishlist(Map<String, dynamic> product) {
+    setState(() {
+      final isWishlisted = wishlist.any((item) => item["id"] == product["id"]);
+
+      if (isWishlisted) {
+        wishlist.removeWhere((item) => item["id"] == product["id"]);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("${product['name']} removed from Wishlist")),
+        );
+      } else {
+        wishlist.add(product);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("${product['name']} added to Wishlist")),
+        );
+      }
+    });
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -46,6 +61,14 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> _screens = [
+      HomeScreen(),
+      CategoryScreen(),
+      CartScreen(),
+      WishlistScreen(), // Ensure updated wishlist is passed
+      SettingScreen(),
+    ];
+
     return Scaffold(
       body: _screens[_selectedIndex],
       bottomNavigationBar: BottomNavigation(

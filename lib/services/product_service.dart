@@ -102,4 +102,46 @@ class ProductService {
       throw Exception("Error fetching categories: $e");
     }
   }
+
+  /// Fetches products by category ID
+  static Future<List<Map<String, dynamic>>> fetchProductsByCategory(
+    int categoryId,
+  ) async {
+    final url = Uri.parse(
+      "$baseUrl/products?category=$categoryId&consumer_key=$consumerKey&consumer_secret=$consumerSecret",
+    );
+
+    try {
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final decodedResponse = json.decode(response.body);
+
+        // Check if response is null or empty
+        if (decodedResponse == null || decodedResponse.isEmpty) {
+          throw Exception("No products found for this category");
+        }
+
+        List<dynamic> products = decodedResponse;
+
+        return products.map<Map<String, dynamic>>((product) {
+          return {
+            "id": product["id"] ?? 0,
+            "name": product["name"] ?? "No Name",
+            "price": product["price"]?.toString() ?? "0",
+            "image":
+                (product["images"] != null && product["images"].isNotEmpty)
+                    ? product["images"][0]["src"]
+                    : "https://via.placeholder.com/150", // Default image
+          };
+        }).toList();
+      } else {
+        throw Exception(
+          "Failed to load products. Status Code: ${response.statusCode}",
+        );
+      }
+    } catch (e) {
+      throw Exception("Error loading products: $e");
+    }
+  }
 }

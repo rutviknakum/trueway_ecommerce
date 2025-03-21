@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:trueway_ecommerce/screens/Wishlist.dart';
+import 'package:provider/provider.dart';
+import 'package:trueway_ecommerce/providers/wishlist_provider.dart';
+import 'package:trueway_ecommerce/models/cart_item.dart';
+import 'package:trueway_ecommerce/screens/SearchScreen.dart';
 import 'package:trueway_ecommerce/screens/cart_screen.dart';
+import 'package:trueway_ecommerce/screens/product_details_screen.dart';
 import '../services/product_service.dart';
-import 'product_details_screen.dart';
-import 'SearchScreen.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -16,7 +18,6 @@ class _HomeScreenState extends State<HomeScreen> {
   List recentlyViewedProducts = [];
   List popularProducts = [];
   List categories = [];
-  List wishlist = [];
   String bannerUrl = "";
   bool isLoading = true;
 
@@ -58,18 +59,16 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void toggleWishlist(Map product) {
-    setState(() {
-      if (wishlist.contains(product)) {
-        wishlist.remove(product);
-      } else {
-        wishlist.add(product);
-      }
-    });
+  void showSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: Duration(seconds: 2)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final wishlistProvider = Provider.of<WishlistProvider>(context);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -83,16 +82,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => SearchScreen()),
-                ),
-          ),
-          IconButton(
-            icon: Icon(Icons.favorite),
-            onPressed:
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => WishlistScreen(wishlist: wishlist),
-                  ),
                 ),
           ),
           IconButton(
@@ -115,11 +104,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     _buildBanner(),
                     _buildCategorySection(),
                     _buildSectionTitle("Newly Launched"),
-                    _buildProductGrid(products),
+                    _buildProductGrid(products, wishlistProvider),
                     _buildSectionTitle("Recently Viewed"),
-                    _buildProductGrid(recentlyViewedProducts),
+                    _buildProductGrid(recentlyViewedProducts, wishlistProvider),
                     _buildSectionTitle("Most Popular"),
-                    _buildProductGrid(popularProducts),
+                    _buildProductGrid(popularProducts, wishlistProvider),
                   ],
                 ),
               ),
@@ -182,7 +171,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildProductGrid(List productList) {
+  Widget _buildProductGrid(
+    List productList,
+    WishlistProvider wishlistProvider,
+  ) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 10),
       child: GridView.builder(
@@ -197,12 +189,17 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         itemBuilder: (context, index) {
           final product = productList[index];
-          final hasDiscount = product["regular_price"] != product["price"];
+          final bool isWishlisted = wishlistProvider.isWishlisted(
+            product["id"],
+          );
+          final bool hasDiscount =
+              product["regular_price"].toString() !=
+              product["price"].toString();
           final discountPercentage =
               hasDiscount
-                  ? ((double.parse(product["regular_price"]) -
-                          double.parse(product["price"])) /
-                      double.parse(product["regular_price"]) *
+                  ? ((double.parse(product["regular_price"].toString()) -
+                          double.parse(product["price"].toString())) /
+                      double.parse(product["regular_price"].toString()) *
                       100)
                   : 0;
 
@@ -245,7 +242,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                             if (hasDiscount)
-                              Row(
+                              Wrap(
+                                spacing: 5,
                                 children: [
                                   Text(
                                     "₹${product["price"]}",
@@ -262,11 +260,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                       color: Colors.grey,
                                     ),
                                   ),
-                                  SizedBox(width: 5),
-                                  Text(
-                                    "-${discountPercentage.toStringAsFixed(0)}%",
-                                    style: TextStyle(color: Colors.green),
-                                  ),
                                 ],
                               ),
                           ],
@@ -279,17 +272,57 @@ class _HomeScreenState extends State<HomeScreen> {
                     right: 5,
                     child: IconButton(
                       icon: Icon(
-                        wishlist.contains(product)
-                            ? Icons.favorite
-                            : Icons.favorite_border,
-                        color:
-                            wishlist.contains(product)
-                                ? Colors.red
-                                : Colors.grey,
+                        isWishlisted ? Icons.favorite : Icons.favorite_border,
+                        color: isWishlisted ? Colors.red : Colors.grey,
                       ),
-                      onPressed: () => toggleWishlist(product),
+                      onPressed: () {
+                        final cartItem = CartItem(
+                          id: product["id"],
+                          name: product["name"],
+                          image: product["images"][0]["src"],
+                          price: double.parse(product["price"].toString()),
+                          imageUrl: '',
+                        );
+
+                        if (isWishlisted) {
+                          wishlistProvider.removeFromWishlist(cartItem.id);
+                          showSnackBar(
+                            context,
+                            "${product["name"]} removed from wishlist",
+                          );
+                        } else {
+                          wishlistProvider.addToWishlist(cartItem);
+                          showSnackBar(
+                            context,
+                            "${product["name"]} added to wishlist",
+                          );
+                        }
+                      },
                     ),
                   ),
+                  if (hasDiscount)
+                    Positioned(
+                      top: 5,
+                      left: 5,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Text(
+                          "-${discountPercentage.toStringAsFixed(0)}%",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
