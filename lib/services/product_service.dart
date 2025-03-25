@@ -85,6 +85,10 @@ class ProductService {
       if (response.statusCode == 200) {
         List<dynamic> categories = json.decode(response.body);
 
+        categories.forEach((cat) {
+          print("Category ID: ${cat['id']} - Name: ${cat['name']}");
+        });
+
         return categories.map<Map<String, dynamic>>((category) {
           return {
             "id": category["id"],
@@ -119,11 +123,11 @@ class ProductService {
 
         // Check if response is null or empty
         if (decodedResponse == null || decodedResponse.isEmpty) {
-          throw Exception("No products found for this category");
+          print("No products found for category ID: $categoryId");
+          return []; // Return empty list instead of throwing exception
         }
 
         List<dynamic> products = decodedResponse;
-
         return products.map<Map<String, dynamic>>((product) {
           return {
             "id": product["id"] ?? 0,
@@ -143,5 +147,22 @@ class ProductService {
     } catch (e) {
       throw Exception("Error loading products: $e");
     }
+  }
+
+  /// Fetches all products grouped by category
+  static Future<Map<String, List<Map<String, dynamic>>>>
+  fetchAllProductsByCategory() async {
+    final categories = await fetchCategories(); // Fetch all categories
+    Map<String, List<Map<String, dynamic>>> categorizedProducts = {};
+
+    for (var category in categories) {
+      int categoryId = category['id'];
+      String categoryName = category['name'];
+
+      final products = await fetchProductsByCategory(categoryId);
+
+      categorizedProducts[categoryName] = products;
+    }
+    return categorizedProducts;
   }
 }

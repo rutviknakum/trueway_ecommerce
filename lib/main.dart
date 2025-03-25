@@ -63,9 +63,9 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     final List<Widget> _screens = [
       HomeScreen(),
-      CategoryScreen(),
+      CategoriesScreen(),
       CartScreen(),
-      WishlistScreen(), // Ensure updated wishlist is passed
+      WishlistScreen(),
       SettingScreen(),
     ];
 
