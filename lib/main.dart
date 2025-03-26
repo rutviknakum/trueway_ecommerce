@@ -65,8 +65,8 @@ class _MainScreenState extends State<MainScreen> {
       HomeScreen(),
       CategoriesScreen(),
       CartScreen(),
+      SettingsScreen(),
       WishlistScreen(),
-      SettingScreen(),
     ];
 
     return Scaffold(

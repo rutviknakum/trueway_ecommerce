@@ -23,8 +23,8 @@ class BottomNavigation extends StatelessWidget {
           label: 'Categories',
         ),
         BottomNavigationBarItem(icon: Icon(Icons.shopping_cart), label: 'Cart'),
-        BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Wishlist'),
         BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
+        BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Wishlist'),
       ],
     );
   }

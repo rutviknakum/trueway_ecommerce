@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
+import 'package:trueway_ecommerce/models/cart_item.dart';
+import 'package:trueway_ecommerce/providers/wishlist_provider.dart';
+import 'package:trueway_ecommerce/screens/product_details_screen.dart';
 import 'package:trueway_ecommerce/services/product_service.dart'; // Import ProductService
-import 'package:trueway_ecommerce/screens/product_details_screen.dart'; // ProductDetailsScreen
 
 class CategoriesScreen extends StatefulWidget {
   @override
@@ -72,6 +75,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    void showSnackBar(BuildContext context, String message) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), duration: Duration(seconds: 2)),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text("Category", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -153,6 +162,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                   ),
                               itemBuilder: (context, index) {
                                 final product = products[index];
+                                final wishlistProvider =
+                                    Provider.of<WishlistProvider>(
+                                      context,
+                                      listen: false,
+                                    );
+                                final bool isWishlisted = wishlistProvider
+                                    .isWishlisted(product["id"]);
                                 final price =
                                     double.tryParse(
                                       product['price'].toString(),
@@ -171,11 +187,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                             100
                                         : 0;
 
+                                // Handle missing or empty images safely
                                 final productImage =
-                                    (product['images'] != null &&
-                                            product['images'].isNotEmpty)
+                                    product['images'] != null &&
+                                            product['images'].isNotEmpty
                                         ? product['images'][0]['src']
-                                        : ''; // Use a placeholder image URL if needed
+                                        : 'https://via.placeholder.com/150'; // Fallback image URL
 
                                 return GestureDetector(
                                   onTap: () {
@@ -205,6 +222,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                                 imageUrl: productImage,
                                                 width: double.infinity,
                                                 fit: BoxFit.cover,
+                                                placeholder:
+                                                    (context, url) =>
+                                                        CircularProgressIndicator(),
                                                 errorWidget:
                                                     (context, url, error) =>
                                                         Icon(Icons.error),
@@ -217,7 +237,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                                     CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
-                                                    product['name'] ??
+                                                    product["name"] ??
                                                         'No Name',
                                                     style: TextStyle(
                                                       fontWeight:
@@ -232,7 +252,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                                       spacing: 5,
                                                       children: [
                                                         Text(
-                                                          "₹${product['price']}",
+                                                          "₹${product["price"]}",
                                                           style: TextStyle(
                                                             fontSize: 14,
                                                             color: Colors.red,
@@ -240,7 +260,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                                         ),
                                                         SizedBox(width: 5),
                                                         Text(
-                                                          "₹${product['regular_price']}",
+                                                          "₹${product["regular_price"]}",
                                                           style: TextStyle(
                                                             decoration:
                                                                 TextDecoration
@@ -250,17 +270,54 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                                         ),
                                                       ],
                                                     ),
-                                                  if (!hasDiscount)
-                                                    Text(
-                                                      "₹${product['price']}",
-                                                      style: TextStyle(
-                                                        fontSize: 14,
-                                                      ),
-                                                    ),
                                                 ],
                                               ),
                                             ),
                                           ],
+                                        ),
+                                        Positioned(
+                                          top: 5,
+                                          right: 5,
+                                          child: IconButton(
+                                            icon: Icon(
+                                              isWishlisted
+                                                  ? Icons.favorite
+                                                  : Icons.favorite_border,
+                                              color:
+                                                  isWishlisted
+                                                      ? Colors.red
+                                                      : Colors.grey,
+                                            ),
+                                            onPressed: () {
+                                              final cartItem = CartItem(
+                                                id: product["id"],
+                                                name: product["name"],
+                                                image:
+                                                    product["images"][0]["src"],
+                                                price: price,
+                                                imageUrl: '',
+                                              );
+
+                                              if (isWishlisted) {
+                                                wishlistProvider
+                                                    .removeFromWishlist(
+                                                      cartItem.id,
+                                                    );
+                                                showSnackBar(
+                                                  context,
+                                                  "${product["name"]} removed from wishlist",
+                                                );
+                                              } else {
+                                                wishlistProvider.addToWishlist(
+                                                  cartItem,
+                                                );
+                                                showSnackBar(
+                                                  context,
+                                                  "${product["name"]} added to wishlist",
+                                                );
+                                              }
+                                            },
+                                          ),
                                         ),
                                         if (hasDiscount)
                                           Positioned(
