@@ -6,7 +6,6 @@ import 'package:trueway_ecommerce/screens/WishlistScreen.dart';
 import 'package:trueway_ecommerce/screens/categories_screen.dart';
 import 'package:trueway_ecommerce/screens/home_screen.dart';
 import 'package:trueway_ecommerce/screens/cart_screen.dart';
-import 'package:trueway_ecommerce/screens/splash_screen.dart';
 import 'package:trueway_ecommerce/widgets/bottom_navigation_bar.dart';
 import 'providers/cart_provider.dart';
 
@@ -22,10 +21,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (context) => CartProvider()),
         ChangeNotifierProvider(create: (context) => WishlistProvider()),
       ],
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: SplashScreen(),
-      ),
+      child: MaterialApp(debugShowCheckedModeBanner: false, home: MainScreen()),
     );
   }
 }
