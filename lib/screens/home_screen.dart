@@ -33,30 +33,39 @@ class _HomeScreenState extends State<HomeScreen> {
       final fetchedCategories = await ProductService.fetchCategories();
       final fetchedBanners = await ProductService.fetchBanners();
 
-      setState(() {
-        products = fetchedProducts;
-        categories = fetchedCategories;
-        bannerUrl =
-            fetchedBanners.isNotEmpty
-                ? fetchedBanners[0]
-                : "https://via.placeholder.com/300";
-        isLoading = false;
-      });
+      // Check if the widget is still mounted before updating state
+      if (mounted) {
+        setState(() {
+          products = fetchedProducts;
+          categories = fetchedCategories;
+          bannerUrl =
+              fetchedBanners.isNotEmpty
+                  ? fetchedBanners[0]
+                  : "https://via.placeholder.com/300";
+          isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() => isLoading = false);
-      print("Error fetching home data: $e");
+      // Check if the widget is still mounted before updating state
+      if (mounted) {
+        setState(() => isLoading = false);
+        print("Error fetching home data: $e");
+      }
     }
   }
 
   void addToRecentlyViewed(Map product) {
-    setState(() {
-      if (!recentlyViewedProducts.contains(product)) {
-        recentlyViewedProducts.insert(0, product);
-        if (recentlyViewedProducts.length > 10) {
-          recentlyViewedProducts.removeLast();
+    // Check if the widget is still mounted before updating state
+    if (mounted) {
+      setState(() {
+        if (!recentlyViewedProducts.contains(product)) {
+          recentlyViewedProducts.insert(0, product);
+          if (recentlyViewedProducts.length > 10) {
+            recentlyViewedProducts.removeLast();
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   void showSnackBar(BuildContext context, String message) {
@@ -105,10 +114,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     _buildCategorySection(),
                     _buildSectionTitle("Newly Launched"),
                     _buildProductGrid(products, wishlistProvider),
-                    _buildSectionTitle("Recently Viewed"),
-                    _buildProductGrid(recentlyViewedProducts, wishlistProvider),
-                    _buildSectionTitle("Most Popular"),
-                    _buildProductGrid(popularProducts, wishlistProvider),
+                    if (recentlyViewedProducts.isNotEmpty) ...[
+                      _buildSectionTitle("Recently Viewed"),
+                      _buildProductGrid(
+                        recentlyViewedProducts,
+                        wishlistProvider,
+                      ),
+                    ],
+                    if (popularProducts.isNotEmpty) ...[
+                      _buildSectionTitle("Most Popular"),
+                      _buildProductGrid(popularProducts, wishlistProvider),
+                    ],
                   ],
                 ),
               ),
@@ -145,13 +161,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     children: [
                       CachedNetworkImage(
-                        imageUrl: category["image"],
+                        imageUrl:
+                            category["image"] ??
+                            "https://via.placeholder.com/50",
                         width: 50,
                         height: 50,
                         errorWidget: (context, url, error) => Icon(Icons.error),
                       ),
                       SizedBox(height: 5),
-                      Text(category["name"], style: TextStyle(fontSize: 12)),
+                      Text(
+                        category["name"] ?? "",
+                        style: TextStyle(fontSize: 12),
+                      ),
                     ],
                   ),
                 );
@@ -203,6 +224,37 @@ class _HomeScreenState extends State<HomeScreen> {
                       100)
                   : 0;
 
+          // Check if the product has images; if not, use a built-in fallback widget.
+          final bool hasImages =
+              product["images"] != null && product["images"].isNotEmpty;
+          final String imageUrl =
+              hasImages
+                  ? product["images"][0]["src"]
+                  : ""; // Empty string when no image available
+
+          Widget productImageWidget;
+          if (hasImages) {
+            productImageWidget = CachedNetworkImage(
+              imageUrl: imageUrl,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              placeholder:
+                  (context, url) => Center(child: CircularProgressIndicator()),
+              errorWidget: (context, url, error) => Icon(Icons.error),
+            );
+          } else {
+            productImageWidget = Container(
+              width: double.infinity,
+              height: double.infinity,
+              color: Colors.grey[300],
+              child: Icon(
+                Icons.image_not_supported,
+                size: 50,
+                color: Colors.grey[700],
+              ),
+            );
+          }
+
           return GestureDetector(
             onTap: () {
               addToRecentlyViewed(product);
@@ -223,20 +275,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: CachedNetworkImage(
-                          imageUrl: product["images"][0]["src"],
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
+                      Expanded(child: productImageWidget),
                       Padding(
                         padding: EdgeInsets.all(8),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              product["name"],
+                              product["name"] ?? "",
                               style: TextStyle(fontWeight: FontWeight.bold),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -279,7 +325,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         final cartItem = CartItem(
                           id: product["id"],
                           name: product["name"],
-                          image: product["images"][0]["src"],
+                          image: hasImages ? imageUrl : "",
                           price: double.parse(product["price"].toString()),
                           imageUrl: '',
                         );
@@ -330,5 +376,11 @@ class _HomeScreenState extends State<HomeScreen> {
         },
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    // Clean up any resources here if needed
+    super.dispose();
   }
 }

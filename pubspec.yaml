@@ -46,6 +46,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   animate_do: ^4.2.0
   razorpay_flutter: ^1.4.0
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:

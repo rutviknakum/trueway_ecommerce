@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:trueway_ecommerce/providers/order_provider.dart';
 import 'package:trueway_ecommerce/providers/wishlist_provider.dart';
 import 'package:trueway_ecommerce/screens/Setting_screen.dart';
 import 'package:trueway_ecommerce/screens/WishlistScreen.dart';
@@ -20,6 +21,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (context) => CartProvider()),
         ChangeNotifierProvider(create: (context) => WishlistProvider()),
+        ChangeNotifierProvider(create: (context) => OrderProvider()),
       ],
       child: MaterialApp(debugShowCheckedModeBanner: false, home: MainScreen()),
     );

@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:trueway_ecommerce/models/cart_item.dart';
 import 'package:trueway_ecommerce/providers/wishlist_provider.dart';
 import 'package:trueway_ecommerce/screens/product_details_screen.dart';
-import 'package:trueway_ecommerce/services/product_service.dart'; // Import ProductService
+import 'package:trueway_ecommerce/services/product_service.dart';
 
 class CategoriesScreen extends StatefulWidget {
   @override
@@ -28,15 +28,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     try {
       final fetchedCategories = await ProductService.fetchCategories();
       if (fetchedCategories.isNotEmpty) {
-        final fetchedProducts = await ProductService.fetchProductsByCategory(
-          fetchedCategories[0]['id'],
-        );
         setState(() {
           categories = fetchedCategories;
-          products = fetchedProducts;
-          selectedCategoryId = categories[0]['id'];
-          isLoading = false;
+          selectedCategoryId = fetchedCategories[0]['id'];
         });
+
+        // Fetch products after categories are set
+        await updateProductsForCategory(selectedCategoryId);
       } else {
         setState(() {
           isLoading = false;
@@ -52,14 +50,22 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // Update the products based on selected category
-  void updateProductsForCategory(int categoryId) async {
+  Future<void> updateProductsForCategory(int categoryId) async {
     setState(() {
       isLoading = true;
+      products = []; // Clear previous products
     });
+
     try {
       final fetchedProducts = await ProductService.fetchProductsByCategory(
         categoryId,
       );
+
+      // Debug print to check product structure
+      if (fetchedProducts.isNotEmpty) {
+        print("Product sample: ${fetchedProducts[0]}");
+      }
+
       setState(() {
         products = fetchedProducts;
         selectedCategoryId = categoryId;
@@ -73,14 +79,25 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     }
   }
 
+  // Safe method to extract image URL from product
+  String getProductImageUrl(dynamic product) {
+    try {
+      if (product != null &&
+          product['images'] != null &&
+          product['images'] is List &&
+          product['images'].isNotEmpty &&
+          product['images'][0] != null &&
+          product['images'][0]['src'] != null) {
+        return product['images'][0]['src'];
+      }
+    } catch (e) {
+      print("Error extracting image URL: $e");
+    }
+    return 'https://via.placeholder.com/150';
+  }
+
   @override
   Widget build(BuildContext context) {
-    void showSnackBar(BuildContext context, String message) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), duration: Duration(seconds: 2)),
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: Text("Category", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -101,28 +118,48 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                   // Left side: Categories list
                   Container(
                     width: 120,
-                    padding: EdgeInsets.all(10),
+                    color: Colors.grey[50],
+                    padding: EdgeInsets.symmetric(vertical: 10, horizontal: 5),
                     child: ListView.builder(
                       itemCount: categories.length,
                       itemBuilder: (context, index) {
                         final category = categories[index];
+                        final isSelected = selectedCategoryId == category['id'];
+
                         return GestureDetector(
                           onTap: () {
                             updateProductsForCategory(category['id']);
                           },
                           child: Container(
-                            margin: EdgeInsets.symmetric(vertical: 10),
+                            margin: EdgeInsets.symmetric(vertical: 8),
                             padding: EdgeInsets.all(8),
                             decoration: BoxDecoration(
                               color:
-                                  selectedCategoryId == category['id']
+                                  isSelected
                                       ? Colors.orangeAccent
                                       : Colors.white,
                               borderRadius: BorderRadius.circular(8),
+                              boxShadow:
+                                  isSelected
+                                      ? [
+                                        BoxShadow(
+                                          color: Colors.black12,
+                                          blurRadius: 3,
+                                          offset: Offset(0, 2),
+                                        ),
+                                      ]
+                                      : null,
                             ),
                             child: Text(
                               category['name'] ?? 'Unknown Category',
-                              style: TextStyle(fontSize: 14),
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight:
+                                    isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                              ),
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         );
@@ -132,34 +169,28 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
                   // Right side: Products grid
                   Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          if (products.isEmpty)
-                            Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(20),
-                                child: Text(
-                                  'No products found for this category.',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                    child:
+                        products.isEmpty && !isLoading
+                            ? Center(
+                              child: Text(
+                                'No products found for this category.',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             )
-                          else
-                            GridView.builder(
-                              shrinkWrap: true,
-                              physics: NeverScrollableScrollPhysics(),
-                              itemCount: products.length,
+                            : GridView.builder(
+                              padding: EdgeInsets.all(10),
                               gridDelegate:
                                   SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: 2,
-                                    childAspectRatio: 0.7,
-                                    crossAxisSpacing: 10,
-                                    mainAxisSpacing: 10,
+                                    childAspectRatio:
+                                        1.04, // Calculated ideal aspect ratio
+                                    crossAxisSpacing: 8,
+                                    mainAxisSpacing: 8,
                                   ),
+                              itemCount: products.length,
                               itemBuilder: (context, index) {
                                 final product = products[index];
                                 final wishlistProvider =
@@ -167,19 +198,25 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                       context,
                                       listen: false,
                                     );
+
+                                // Handle product data with null safety
+                                final productId = product["id"] ?? 0;
+                                final productName =
+                                    product["name"] ?? 'No Name';
                                 final bool isWishlisted = wishlistProvider
-                                    .isWishlisted(product["id"]);
-                                final price =
-                                    double.tryParse(
-                                      product['price'].toString(),
-                                    ) ??
-                                    0.0;
+                                    .isWishlisted(productId);
+
+                                // Handle prices safely
+                                final String priceStr =
+                                    product['price']?.toString() ?? '0';
+                                final String regularPriceStr =
+                                    product['regular_price']?.toString() ?? '0';
+                                final price = double.tryParse(priceStr) ?? 0.0;
                                 final regularPrice =
-                                    double.tryParse(
-                                      product['regular_price'].toString(),
-                                    ) ??
-                                    0.0;
-                                final hasDiscount = regularPrice != price;
+                                    double.tryParse(regularPriceStr) ?? 0.0;
+
+                                final hasDiscount =
+                                    regularPrice > 0 && regularPrice != price;
                                 final discountPercentage =
                                     hasDiscount
                                         ? ((regularPrice - price) /
@@ -187,12 +224,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                             100
                                         : 0;
 
-                                // Handle missing or empty images safely
-                                final productImage =
-                                    product['images'] != null &&
-                                            product['images'].isNotEmpty
-                                        ? product['images'][0]['src']
-                                        : 'https://via.placeholder.com/150'; // Fallback image URL
+                                // Get product image safely
+                                final productImage = getProductImageUrl(
+                                  product,
+                                );
 
                                 return GestureDetector(
                                   onTap: () {
@@ -208,60 +243,118 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                   },
                                   child: Card(
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
-                                    elevation: 3,
+                                    elevation: 2,
+                                    margin: EdgeInsets.zero,
                                     child: Stack(
                                       children: [
                                         Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            Expanded(
-                                              child: CachedNetworkImage(
-                                                imageUrl: productImage,
-                                                width: double.infinity,
-                                                fit: BoxFit.cover,
-                                                placeholder:
-                                                    (context, url) =>
-                                                        CircularProgressIndicator(),
-                                                errorWidget:
-                                                    (context, url, error) =>
-                                                        Icon(Icons.error),
+                                            // Image container with fixed height
+                                            Container(
+                                              height:
+                                                  110, // Further reduced height to prevent overflow
+                                              width: double.infinity,
+                                              decoration: BoxDecoration(
+                                                borderRadius: BorderRadius.only(
+                                                  topLeft: Radius.circular(10),
+                                                  topRight: Radius.circular(10),
+                                                ),
+                                              ),
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.only(
+                                                  topLeft: Radius.circular(10),
+                                                  topRight: Radius.circular(10),
+                                                ),
+                                                child: CachedNetworkImage(
+                                                  imageUrl: productImage,
+                                                  fit: BoxFit.cover,
+                                                  placeholder:
+                                                      (
+                                                        context,
+                                                        url,
+                                                      ) => Container(
+                                                        color: Colors.grey[200],
+                                                        child: Center(
+                                                          child: SizedBox(
+                                                            width: 20,
+                                                            height: 20,
+                                                            child:
+                                                                CircularProgressIndicator(
+                                                                  strokeWidth:
+                                                                      2,
+                                                                ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                  errorWidget:
+                                                      (
+                                                        context,
+                                                        url,
+                                                        error,
+                                                      ) => Container(
+                                                        color: Colors.grey[200],
+                                                        child: Icon(
+                                                          Icons
+                                                              .image_not_supported,
+                                                          size: 30,
+                                                        ),
+                                                      ),
+                                                ),
                                               ),
                                             ),
+
+                                            // Product details
                                             Padding(
-                                              padding: EdgeInsets.all(8),
+                                              padding: EdgeInsets.all(
+                                                6,
+                                              ), // Reduced padding
                                               child: Column(
                                                 crossAxisAlignment:
                                                     CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
-                                                    product["name"] ??
-                                                        'No Name',
+                                                    productName,
                                                     style: TextStyle(
                                                       fontWeight:
                                                           FontWeight.bold,
+                                                      fontSize:
+                                                          12, // Smaller font size
                                                     ),
-                                                    maxLines: 1,
+                                                    maxLines: 1, // Only 1 line
                                                     overflow:
                                                         TextOverflow.ellipsis,
                                                   ),
+                                                  SizedBox(
+                                                    height: 1,
+                                                  ), // Minimal spacing
                                                   if (hasDiscount)
-                                                    Wrap(
-                                                      spacing: 5,
+                                                    Row(
                                                       children: [
                                                         Text(
-                                                          "₹${product["price"]}",
+                                                          "₹$price",
                                                           style: TextStyle(
-                                                            fontSize: 14,
-                                                            color: Colors.red,
+                                                            fontSize:
+                                                                12, // Smaller font
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: Color.fromRGBO(
+                                                              29,
+                                                              27,
+                                                              32,
+                                                              1,
+                                                            ), // Using your color code
                                                           ),
                                                         ),
-                                                        SizedBox(width: 5),
+                                                        SizedBox(width: 3),
                                                         Text(
-                                                          "₹${product["regular_price"]}",
+                                                          "₹$regularPrice",
                                                           style: TextStyle(
+                                                            fontSize:
+                                                                10, // Smaller font
                                                             decoration:
                                                                 TextDecoration
                                                                     .lineThrough,
@@ -269,56 +362,90 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                                           ),
                                                         ),
                                                       ],
+                                                    )
+                                                  else
+                                                    Text(
+                                                      "₹$price",
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Color.fromRGBO(
+                                                          29,
+                                                          27,
+                                                          32,
+                                                          1,
+                                                        ), // Using your color code
+                                                      ),
                                                     ),
                                                 ],
                                               ),
                                             ),
                                           ],
                                         ),
+
+                                        // Wishlist button
                                         Positioned(
                                           top: 5,
                                           right: 5,
-                                          child: IconButton(
-                                            icon: Icon(
-                                              isWishlisted
-                                                  ? Icons.favorite
-                                                  : Icons.favorite_border,
-                                              color:
-                                                  isWishlisted
-                                                      ? Colors.red
-                                                      : Colors.grey,
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withOpacity(
+                                                0.7,
+                                              ),
+                                              shape: BoxShape.circle,
                                             ),
-                                            onPressed: () {
-                                              final cartItem = CartItem(
-                                                id: product["id"],
-                                                name: product["name"],
-                                                image:
-                                                    product["images"][0]["src"],
-                                                price: price,
-                                                imageUrl: '',
-                                              );
+                                            child: IconButton(
+                                              icon: Icon(
+                                                isWishlisted
+                                                    ? Icons.favorite
+                                                    : Icons.favorite_border,
+                                                color:
+                                                    isWishlisted
+                                                        ? Colors.red
+                                                        : Colors.grey,
+                                                size: 18, // Smaller icon
+                                              ),
+                                              onPressed: () {
+                                                try {
+                                                  final cartItem = CartItem(
+                                                    id: productId,
+                                                    name: productName,
+                                                    image: productImage,
+                                                    price: price,
+                                                    imageUrl: productImage,
+                                                  );
 
-                                              if (isWishlisted) {
-                                                wishlistProvider
-                                                    .removeFromWishlist(
-                                                      cartItem.id,
+                                                  if (isWishlisted) {
+                                                    wishlistProvider
+                                                        .removeFromWishlist(
+                                                          cartItem.id,
+                                                        );
+                                                    _showSnackBar(
+                                                      context,
+                                                      "$productName removed from wishlist",
                                                     );
-                                                showSnackBar(
-                                                  context,
-                                                  "${product["name"]} removed from wishlist",
-                                                );
-                                              } else {
-                                                wishlistProvider.addToWishlist(
-                                                  cartItem,
-                                                );
-                                                showSnackBar(
-                                                  context,
-                                                  "${product["name"]} added to wishlist",
-                                                );
-                                              }
-                                            },
+                                                  } else {
+                                                    wishlistProvider
+                                                        .addToWishlist(
+                                                          cartItem,
+                                                        );
+                                                    _showSnackBar(
+                                                      context,
+                                                      "$productName added to wishlist",
+                                                    );
+                                                  }
+                                                } catch (e) {
+                                                  print(
+                                                    "Error handling wishlist: $e",
+                                                  );
+                                                }
+                                              },
+                                            ),
                                           ),
                                         ),
+
+                                        // Discount label
                                         if (hasDiscount)
                                           Positioned(
                                             top: 5,
@@ -349,12 +476,19 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                 );
                               },
                             ),
-                        ],
-                      ),
-                    ),
                   ),
                 ],
               ),
+    );
+  }
+
+  void _showSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 }

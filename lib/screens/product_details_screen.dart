@@ -4,6 +4,7 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:provider/provider.dart';
 import 'package:trueway_ecommerce/models/cart_item.dart';
 import 'package:trueway_ecommerce/providers/cart_provider.dart';
+import 'package:trueway_ecommerce/screens/CheckoutScreens/AddressScreen.dart';
 import 'package:trueway_ecommerce/screens/cart_screen.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
@@ -17,7 +18,7 @@ class ProductDetailsScreen extends StatefulWidget {
 
 class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   int quantity = 1;
-  int _selectedImageIndex = 0; // Track which thumbnail is selected
+  int _selectedImageIndex = 0; // Track selected thumbnail index
 
   @override
   Widget build(BuildContext context) {
@@ -42,8 +43,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         widget.product["description"]?.replaceAll(RegExp(r'<[^>]*>'), '') ??
         "No description available";
 
-    // Main image URL from the selected thumbnail or fallback placeholder
-
     // Build the main product image carousel
     Widget buildMainImage() {
       return CarouselSlider(
@@ -53,6 +52,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           enlargeCenterPage: true,
           aspectRatio: 16 / 9,
           viewportFraction: 0.8,
+          onPageChanged: (index, reason) {
+            setState(() {
+              _selectedImageIndex = index;
+            });
+          },
         ),
         items:
             images.isNotEmpty
@@ -73,7 +77,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       );
     }
 
-    // Build thumbnail row for selecting images
+    // Build the thumbnail row for image selection
     Widget buildThumbnailRow() {
       if (images.isEmpty) return SizedBox.shrink();
       return SingleChildScrollView(
@@ -112,20 +116,54 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       );
     }
 
-    // Build the scrollable content (everything except quantity & buttons)
+    // Function to create a CartItem object from the current product
+    CartItem createCartItemFromProduct() {
+      String selectedImageUrl = "";
+      if (images.isNotEmpty) {
+        selectedImageUrl = images[_selectedImageIndex]["src"] ?? "";
+      }
+
+      return CartItem(
+        id:
+            widget.product["id"] is int
+                ? widget.product["id"]
+                : int.tryParse(widget.product["id"].toString()) ?? 0,
+        name: productName,
+        imageUrl: selectedImageUrl,
+        price: currentPrice,
+        image: "", // Not used
+        quantity: quantity,
+      );
+    }
+
+    // Function to add the current product to cart
+    void addProductToCart(
+      BuildContext context, {
+      bool showNotification = true,
+    }) {
+      final cart = Provider.of<CartProvider>(context, listen: false);
+      final cartItem = createCartItemFromProduct();
+
+      cart.addToCart(cartItem);
+
+      if (showNotification) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("$productName added to cart!")));
+      }
+    }
+
+    // Build the scrollable main content of the screen
     Widget buildScrollableContent() {
       return SingleChildScrollView(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Main product image carousel
             buildMainImage(),
-            SizedBox(height: 10),
-            // Thumbnails for image selection
+            SizedBox(height: 12),
             buildThumbnailRow(),
             SizedBox(height: 20),
-            // Product title and sale label
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -149,8 +187,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   ),
               ],
             ),
-            SizedBox(height: 6),
-            // Price
+            SizedBox(height: 8),
             Text(
               "₹$currentPrice",
               style: TextStyle(
@@ -159,16 +196,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            SizedBox(height: 6),
-            // SKU & Availability (if available)
-            Text(
-              "SKU: ${widget.product['sku'] ?? 'TW00016'}",
-              style: TextStyle(
-                color: Colors.grey[700],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            SizedBox(height: 2),
+            SizedBox(height: 8),
             Row(
               children: [
                 Text(
@@ -188,14 +216,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 ),
               ],
             ),
-            SizedBox(height: 10),
-            // Wishlist placeholder text (if needed)
-            Text(
-              "[yith_wcwl_add_to_wishlist]",
-              style: TextStyle(color: Colors.grey[600]),
-            ),
             SizedBox(height: 20),
-            // Description Section
             Text(
               "DESCRIPTION",
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -211,25 +232,24 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             ),
             SizedBox(
               height: 100,
-            ), // Extra space so content can scroll above the fixed bottom
+            ), // Extra space for scrolling above the fixed bottom
           ],
         ),
       );
     }
 
-    // Build fixed bottom section for quantity and buttons (not scrollable)
+    // Build the fixed bottom section with improved spacing and styling
     Widget buildFixedBottomSection() {
       return Container(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         decoration: BoxDecoration(
           color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           boxShadow: [
             BoxShadow(
-              // ignore: deprecated_member_use
-              color: Colors.grey.withOpacity(0.5),
-              spreadRadius: 2,
-              blurRadius: 5,
+              color: Colors.black12,
               offset: Offset(0, -3),
+              blurRadius: 12,
             ),
           ],
         ),
@@ -241,98 +261,101 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  "Quantity:",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  "Quantity",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 Row(
                   children: [
-                    IconButton(
-                      icon: Icon(Icons.remove),
-                      onPressed: () {
+                    GestureDetector(
+                      onTap: () {
                         if (quantity > 1) {
                           setState(() {
                             quantity--;
                           });
                         }
                       },
+                      child: Container(
+                        padding: EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(Icons.remove, size: 24),
+                      ),
                     ),
+                    SizedBox(width: 16),
                     Text(
                       "$quantity",
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(Icons.add),
-                      onPressed: () {
+                    SizedBox(width: 16),
+                    GestureDetector(
+                      onTap: () {
                         setState(() {
                           quantity++;
                         });
                       },
+                      child: Container(
+                        padding: EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(Icons.add, size: 24),
+                      ),
                     ),
                   ],
                 ),
               ],
             ),
-            SizedBox(height: 10),
-            // Action Buttons: Buy Now & Add to Cart
+            SizedBox(height: 24),
+            // Action Buttons
             Row(
               children: [
                 Expanded(
-                  child: ElevatedButton(
+                  child: ElevatedButton.icon(
+                    icon: Icon(Icons.flash_on),
+                    label: Text("BUY NOW", style: TextStyle(fontSize: 18)),
                     style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 12),
                       backgroundColor: Colors.green,
+                      padding: EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                     ),
                     onPressed: () {
-                      // Implement Buy Now functionality
-                    },
-                    child: Text("BUY NOW", style: TextStyle(fontSize: 16)),
-                  ),
-                ),
-                SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      backgroundColor: Colors.orange,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onPressed: () {
-                      final cart = Provider.of<CartProvider>(
+                      // Add the product to cart first (without notification)
+                      addProductToCart(context, showNotification: false);
+
+                      // Then navigate to checkout
+                      Navigator.push(
                         context,
-                        listen: false,
-                      );
-                      cart.addToCart(
-                        CartItem(
-                          id:
-                              widget.product["id"] is int
-                                  ? widget.product["id"]
-                                  : int.tryParse(
-                                        widget.product["id"].toString(),
-                                      ) ??
-                                      0,
-                          name: productName,
-                          image:
-                              images.isNotEmpty
-                                  ? images[_selectedImageIndex]["src"]
-                                  : "",
-                          price: currentPrice,
-                          imageUrl: '',
-                          quantity: quantity, // Pass the selected quantity
+                        MaterialPageRoute(
+                          builder: (context) => AddressScreen(),
                         ),
                       );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("$productName added to cart!")),
-                      );
                     },
-                    child: Text("ADD TO CART", style: TextStyle(fontSize: 16)),
+                  ),
+                ),
+                SizedBox(width: 24),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: Icon(Icons.add_shopping_cart),
+                    label: Text("ADD TO CART", style: TextStyle(fontSize: 18)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    onPressed: () {
+                      // Add to cart with notification
+                      addProductToCart(context);
+                    },
                   ),
                 ),
               ],
@@ -356,7 +379,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           IconButton(
             icon: Icon(Icons.favorite_border),
             onPressed: () {
-              // Handle wishlist functionality here
+              // Handle wishlist functionality if needed
             },
           ),
           IconButton(
@@ -370,11 +393,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           ),
         ],
       ),
-      // The main content scrolls, while the bottom section is fixed.
       body: Stack(
         children: [
           buildScrollableContent(),
-          // Fixed bottom section (using Align to position at the bottom)
           Align(
             alignment: Alignment.bottomCenter,
             child: buildFixedBottomSection(),
