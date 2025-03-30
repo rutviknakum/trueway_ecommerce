@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:trueway_ecommerce/providers/cart_provider.dart';
-import 'package:trueway_ecommerce/screens/OrderConfirmationScreen.dart';
+import 'package:trueway_ecommerce/screens/orderscrren/OrderConfirmationScreen.dart';
 import 'package:trueway_ecommerce/services/order_service.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -624,26 +624,36 @@ class _PaymentScreenState extends State<PaymentScreen> {
     });
 
     try {
+      // IMPORTANT: Calculate the total amount before clearing the cart
+      double subtotal = cart.totalPrice;
+      double discount = cart.discountAmount;
+      double totalAmount = subtotal - discount + widget.shippingCost;
+
       // Call your order service
       final orderService = OrderService();
       final customerId = await orderService.getCustomerId("user@example.com");
 
-      // Add payment and shipping info to order
-
-      final response = await orderService.placeOrder(customerId, cart.items);
+      // Add shipping address and payment method information
+      final response = await orderService.placeOrder(
+        customerId,
+        cart.items,
+        shippingAddress: widget.shippingAddress,
+        paymentMethod: _selectedPaymentMethod,
+      );
 
       if (response != null) {
-        // Clear cart
+        // Clear cart AFTER calculating the total amount
         cart.clearCart();
 
-        // Navigate to confirmation screen
+        // Navigate to confirmation screen with the saved total amount
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder:
                 (context) => OrderConfirmationScreen(
-                  orderId: response['id'],
-                  finalPrice: cart.finalPrice,
+                  orderId: response['id'] ?? 9310,
+                  finalPrice:
+                      totalAmount, // Use the calculated total, not cart.finalPrice
                 ),
           ),
         );
