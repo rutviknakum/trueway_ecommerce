@@ -1,360 +1,128 @@
-import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:trueway_ecommerce/screens/product_details_screen.dart';
+import 'package:trueway_ecommerce/services/search_service.dart';
+import 'package:trueway_ecommerce/widgets/ProductCard_Search.dart';
+import 'package:trueway_ecommerce/widgets/ProductGridItem_search.dart';
+import 'package:trueway_ecommerce/widgets/filters/filter_modal.dart';
+import 'package:trueway_ecommerce/models/search_filter.dart';
 
 class SearchScreen extends StatefulWidget {
+  const SearchScreen({Key? key}) : super(key: key);
+
   @override
   _SearchScreenState createState() => _SearchScreenState();
 }
 
 class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final SearchService _searchService = SearchService();
   List<dynamic> _searchResults = [];
   bool _isLoading = false;
+  bool _hasSearched = false;
 
-  // Filters
-  String? _selectedCategory;
-  double _minPrice = 0;
-  double _maxPrice = 100000;
-  List<Map<String, dynamic>> _categories = [];
+  // Debounce for search
+  Timer? _debounce;
+  final int _debounceTime = 800; // milliseconds
 
-  static const String baseUrl = "https://map.uminber.in/wp-json/wc/v3/products";
-  static const String categoryUrl =
-      "https://map.uminber.in/wp-json/wc/v3/products/categories";
-  static const String consumerKey =
-      "ck_7ddea3cc57458b1e0b0a4ec2256fa403dcab8892";
-  static const String consumerSecret =
-      "cs_8589a8dc27c260024b9db84712813a95a5747f9f";
+  // Current search filters
+  SearchFilter _currentFilter = SearchFilter();
 
   @override
   void initState() {
     super.initState();
-    _fetchCategories(); // Fetch categories when screen loads
+    _initData();
   }
 
-  /// Fetches product categories from WooCommerce API
-  void _fetchCategories() async {
-    final url = Uri.parse(
-      "$categoryUrl?consumer_key=$consumerKey&consumer_secret=$consumerSecret",
-    );
-
-    try {
-      final response = await http.get(url);
-      if (response.statusCode == 200) {
-        List<dynamic> categories = json.decode(response.body);
-        setState(() {
-          _categories =
-              categories
-                  .map((cat) => {"id": cat["id"], "name": cat["name"]})
-                  .toList();
-        });
-      } else {
-        print("Failed to fetch categories");
-      }
-    } catch (e) {
-      print("Category fetch error: $e");
-    }
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
   }
 
-  /// Searches products based on the query and selected filters
-  // void _searchProducts(String query) async {
-  //   if (query.isEmpty) {
-  //     setState(() {
-  //       _searchResults.clear();
-  //     });
-  //     return;
-  //   }
+  Future<void> _initData() async {
+    await _searchService.initializeData();
+    setState(() {});
+  }
 
-  //   setState(() {
-  //     _isLoading = true;
-  //   });
-
-  //   final url = Uri.parse(
-  //     "$baseUrl?search=$query"
-  //     "&consumer_key=$consumerKey&consumer_secret=$consumerSecret"
-  //     "${_selectedCategory != null ? '&category=$_selectedCategory' : ''}"
-  //     "&min_price=${_minPrice.toInt()}"
-  //     "&max_price=${_maxPrice.toInt()}",
-  //   );
-
-  //   try {
-  //     final response = await http.get(url);
-  //     if (response.statusCode == 200) {
-  //       List<dynamic> products = json.decode(response.body);
-  //       setState(() {
-  //         _searchResults = products;
-  //       });
-  //     } else {
-  //       throw Exception("Failed to fetch search results");
-  //     }
-  //   } catch (e) {
-  //     print("Search error: $e");
-  //   } finally {
-  //     setState(() {
-  //       _isLoading = false;
-  //     });
-  //   }
-  // }
-
-  void _searchProducts(String query) async {
-    if (query.isEmpty) {
+  void _performSearch(String query) async {
+    // Clear results if query is empty
+    if (query.trim().isEmpty) {
       setState(() {
         _searchResults.clear();
+        _hasSearched = true;
+        _isLoading = false;
       });
       return;
     }
 
     setState(() {
       _isLoading = true;
+      _hasSearched = true;
     });
 
-    final url = Uri.parse(
-      "$baseUrl?search=$query"
-      "&consumer_key=$consumerKey&consumer_secret=$consumerSecret"
-      "${_selectedCategory != null ? '&category=$_selectedCategory' : ''}"
-      "&min_price=${_minPrice.toInt()}"
-      "&max_price=${_maxPrice.toInt()}",
-    );
-
     try {
-      final response = await http.get(url);
-      if (response.statusCode == 200) {
-        List<dynamic> products = json.decode(response.body);
-
-        // Filtering out products that don’t match the search query correctly
-        List<dynamic> filteredProducts =
-            products.where((product) {
-              String name = (product['name'] ?? "").toString().toLowerCase();
-              return name.contains(query.toLowerCase());
-            }).toList();
-
-        // Ensuring all Boolean fields are safely converted to avoid type errors
-        for (var product in filteredProducts) {
-          product['on_sale'] =
-              product['on_sale'] ?? false; // Handle null safely
-        }
-
-        setState(() {
-          _searchResults = filteredProducts;
-        });
-      } else {
-        throw Exception("Failed to fetch search results");
-      }
+      final results = await _searchService.searchProducts(
+        query,
+        _currentFilter,
+      );
+      setState(() {
+        _searchResults = results;
+        _isLoading = false;
+      });
     } catch (e) {
-      print("Search error: $e");
-    } finally {
       setState(() {
         _isLoading = false;
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error searching products: ${e.toString()}"),
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 
-  /// Shows the filter modal bottom sheet
-  void _showFilterDialog() {
-    showModalBottomSheet(
+  void _showFilterDialog() async {
+    final result = await showModalBottomSheet<SearchFilter?>(
       context: context,
-      shape: RoundedRectangleBorder(
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Title
-                  Center(
-                    child: Text(
-                      "Filter Options",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 12),
-
-                  // Card for Filters
-                  Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 4,
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Price Range
-                          Text(
-                            "Price Range (INR)",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          RangeSlider(
-                            values: RangeValues(_minPrice, _maxPrice),
-                            min: 0,
-                            max: 100000,
-                            divisions: 20,
-                            labels: RangeLabels(
-                              "${_minPrice.toInt()} INR",
-                              "${_maxPrice.toInt()} INR",
-                            ),
-                            onChanged: (RangeValues values) {
-                              setState(() {
-                                _minPrice = values.start;
-                                _maxPrice = values.end;
-                              });
-                            },
-                          ),
-
-                          SizedBox(height: 12),
-
-                          // Category Dropdown
-                          Text(
-                            "Category",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            value: _selectedCategory,
-                            hint: Text("Select Category"),
-                            decoration: InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            onChanged: (String? newValue) {
-                              setState(() {
-                                _selectedCategory = newValue;
-                              });
-                            },
-                            items:
-                                _categories.map<DropdownMenuItem<String>>((
-                                  category,
-                                ) {
-                                  return DropdownMenuItem<String>(
-                                    value: category["id"].toString(),
-                                    child: Text(category["name"]),
-                                  );
-                                }).toList(),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(height: 12),
-
-                  // Buttons Row
-                  Row(
-                    children: [
-                      // Clear Filters Button
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            setState(() {
-                              _selectedCategory = null;
-                              _minPrice = 0;
-                              _maxPrice = 100000;
-                            });
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.redAccent,
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 4,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.clear, size: 18, color: Colors.white),
-                              SizedBox(width: 6),
-                              Text(
-                                "Clear Filters",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 12),
-
-                      // Apply Filters Button
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            _searchProducts(_searchController.text);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 4,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.filter_alt,
-                                size: 18,
-                                color: Colors.white,
-                              ),
-                              SizedBox(width: 6),
-                              Text(
-                                "Apply Filters",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 10),
-                ],
-              ),
-            );
-          },
-        );
-      },
+      builder:
+          (context) => FilterModal(
+            currentFilter: _currentFilter,
+            categories: _searchService.categories,
+            sortOptions: _searchService.sortOptions,
+            minPrice: _searchService.minPrice,
+            maxPrice: _searchService.maxPrice,
+          ),
     );
+
+    if (result != null) {
+      setState(() {
+        _currentFilter = result;
+      });
+
+      if (_searchController.text.isNotEmpty) {
+        _performSearch(_searchController.text);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Search Products")),
+      appBar: AppBar(title: const Text("Search Products")),
       body: Padding(
         padding: const EdgeInsets.all(10),
         child: Column(
           children: [
+            // Search bar with filter button
             Row(
               children: [
                 Expanded(
@@ -362,123 +130,206 @@ class _SearchScreenState extends State<SearchScreen> {
                     controller: _searchController,
                     decoration: InputDecoration(
                       hintText: "Search products...",
-                      prefixIcon: Icon(Icons.search),
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon:
+                          _searchController.text.isNotEmpty
+                              ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  setState(() {
+                                    _searchController.clear();
+                                    _searchResults.clear();
+                                    _hasSearched = false;
+                                  });
+                                },
+                              )
+                              : null,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
                     onChanged: (value) {
-                      _searchProducts(value);
+                      // Implement debounce to avoid excessive API calls
+                      if (_debounce?.isActive ?? false) _debounce!.cancel();
+                      _debounce = Timer(
+                        Duration(milliseconds: _debounceTime),
+                        () {
+                          _performSearch(value);
+                        },
+                      );
+                    },
+                    onSubmitted: (value) {
+                      if (_debounce?.isActive ?? false) _debounce!.cancel();
+                      _performSearch(value);
                     },
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.filter_list),
-                  onPressed: () {
-                    _showFilterDialog();
-                  },
+                  icon: const Icon(Icons.filter_list),
+                  onPressed: _showFilterDialog,
                 ),
               ],
             ),
-            if (_isLoading)
-              CircularProgressIndicator()
-            else
-              // Expanded(
-              //   child: ListView.builder(
-              //     itemCount: _searchResults.length,
-              //     itemBuilder: (context, index) {
-              //       var product = _searchResults[index];
-              //       return ListTile(
-              //         title: Text(product['name']),
-              //         subtitle: Text(
-              //           'Price: ${product['price']} INR',
-              //         ), // Display price
-              //         // Add more details as needed
-              //       );
-              //     },
-              //   ),
-              // )
-              Expanded(
-                child: ListView.builder(
-                  itemCount: _searchResults.length,
-                  itemBuilder: (context, index) {
-                    var product = _searchResults[index];
 
-                    return GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder:
-                                (context) =>
-                                    ProductDetailsScreen(product: product),
-                          ),
-                        );
-                      },
-                      child: Card(
-                        margin: EdgeInsets.symmetric(vertical: 8),
-                        elevation: 4,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ListTile(
-                          leading:
-                              product['images'] != null &&
-                                      product['images'].isNotEmpty
-                                  ? Image.network(
-                                    product['images'][0]['src'], // Correct WooCommerce image path
-                                    width: 60,
-                                    height: 60,
-                                    fit: BoxFit.cover,
-                                  )
-                                  : Icon(Icons.image_not_supported, size: 60),
-                          title: Text(
-                            product['name'] ?? "No Name",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ((product['regular_price'] != null &&
-                                      product['price'] != null &&
-                                      product['regular_price'] !=
-                                          product['price'])
-                                  ? Row(
-                                    children: [
-                                      Text(
-                                        "₹${product['regular_price'] ?? '0'}",
-                                        style: TextStyle(
-                                          decoration:
-                                              TextDecoration.lineThrough,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        "₹${product['price'] ?? '0'}",
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.green,
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                  : Text(
-                                    "₹${product['price'] ?? '0'}",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  )),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+            // Results area
+            Expanded(child: _buildResultsArea()),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildResultsArea() {
+    // Loading state
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // Initial state - no search performed yet
+    if (!_hasSearched) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search, size: 80, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              "Search for products",
+              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // No results found
+    if (_searchResults.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 80, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              "No products found",
+              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Try a different search term or adjust filters",
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Search results - dynamically adjust layout based on selection
+    return _buildProductList();
+  }
+
+  Widget _buildProductList() {
+    // Different layouts based on selection
+    switch (_currentFilter.layoutType) {
+      case 0: // Default list view
+        return ListView.builder(
+          itemCount: _searchResults.length,
+          itemBuilder: (context, index) {
+            return ProductCard_Search(
+              product: _searchResults[index],
+              onTap: () => _navigateToProductDetails(_searchResults[index]),
+            );
+          },
+        );
+
+      case 1: // Grid view (2 columns)
+        return GridView.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 0.7,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+          ),
+          itemCount: _searchResults.length,
+          itemBuilder: (context, index) {
+            return ProductGridItem_search(
+              product: _searchResults[index],
+              onTap: () => _navigateToProductDetails(_searchResults[index]),
+            );
+          },
+        );
+
+      case 2: // Horizontal scroll list
+        return ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: _searchResults.length,
+          itemBuilder: (context, index) {
+            return Container(
+              width: MediaQuery.of(context).size.width * 0.7,
+              margin: const EdgeInsets.only(right: 10),
+              child: ProductCard_Search(
+                product: _searchResults[index],
+                onTap: () => _navigateToProductDetails(_searchResults[index]),
+              ),
+            );
+          },
+        );
+
+      case 3: // Compact list
+        return ListView.builder(
+          itemCount: _searchResults.length,
+          itemBuilder: (context, index) {
+            return ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
+              leading: SizedBox(
+                width: 60,
+                height: 60,
+                child: _searchService.buildProductImage(_searchResults[index]),
+              ),
+              title: Text(
+                _searchResults[index]['name'] ?? "No Name",
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text("₹${_searchResults[index]['price'] ?? '0'}"),
+              onTap: () => _navigateToProductDetails(_searchResults[index]),
+            );
+          },
+        );
+
+      case 4: // Text only list
+        return ListView.builder(
+          itemCount: _searchResults.length,
+          itemBuilder: (context, index) {
+            return ListTile(
+              title: Text(_searchResults[index]['name'] ?? "No Name"),
+              subtitle: Text("₹${_searchResults[index]['price'] ?? '0'}"),
+              onTap: () => _navigateToProductDetails(_searchResults[index]),
+            );
+          },
+        );
+
+      default:
+        return ListView.builder(
+          itemCount: _searchResults.length,
+          itemBuilder: (context, index) {
+            return ProductCard_Search(
+              product: _searchResults[index],
+              onTap: () => _navigateToProductDetails(_searchResults[index]),
+            );
+          },
+        );
+    }
+  }
+
+  void _navigateToProductDetails(dynamic product) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProductDetailsScreen(product: product),
       ),
     );
   }

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
-import 'package:trueway_ecommerce/providers/wishlist_provider.dart';
-import 'package:trueway_ecommerce/models/cart_item.dart';
+
+import 'package:trueway_ecommerce/providers/cart_provider.dart';
 import 'package:trueway_ecommerce/screens/SearchScreen.dart';
 import 'package:trueway_ecommerce/screens/cart_screen.dart';
-import 'package:trueway_ecommerce/screens/product_details_screen.dart';
-import '../services/product_service.dart';
+import 'package:trueway_ecommerce/services/product_service.dart';
+import 'package:trueway_ecommerce/widgets/home/banner_widget.dart';
+import 'package:trueway_ecommerce/widgets/home/category_list_widget.dart';
+import 'package:trueway_ecommerce/widgets/home/product_section_widget.dart';
+import 'package:trueway_ecommerce/utils/ui_helpers.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -37,11 +39,13 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         setState(() {
           products = fetchedProducts;
+          popularProducts = List.from(fetchedProducts)..shuffle();
+          popularProducts = popularProducts.take(4).toList();
           categories = fetchedCategories;
           bannerUrl =
               fetchedBanners.isNotEmpty
                   ? fetchedBanners[0]
-                  : "https://via.placeholder.com/300";
+                  : "assets/images/placeholder_banner.jpg";
           isLoading = false;
         });
       }
@@ -54,29 +58,28 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void addToRecentlyViewed(Map product) {
+  void addToRecentlyViewed(dynamic product) {
     // Check if the widget is still mounted before updating state
     if (mounted) {
       setState(() {
-        if (!recentlyViewedProducts.contains(product)) {
-          recentlyViewedProducts.insert(0, product);
-          if (recentlyViewedProducts.length > 10) {
-            recentlyViewedProducts.removeLast();
-          }
+        // Remove if already present to avoid duplicates
+        recentlyViewedProducts.removeWhere((p) => p["id"] == product["id"]);
+
+        // Add at the beginning
+        recentlyViewedProducts.insert(0, product);
+
+        // Limit to 10 items
+        if (recentlyViewedProducts.length > 10) {
+          recentlyViewedProducts.removeLast();
         }
       });
     }
   }
 
-  void showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: Duration(seconds: 2)),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final wishlistProvider = Provider.of<WishlistProvider>(context);
+    final cartProvider = Provider.of<CartProvider>(context);
+    final cartItemCount = cartProvider.items.length;
 
     return Scaffold(
       appBar: AppBar(
@@ -93,14 +96,42 @@ class _HomeScreenState extends State<HomeScreen> {
                   MaterialPageRoute(builder: (context) => SearchScreen()),
                 ),
           ),
-          IconButton(
-            icon: Icon(Icons.shopping_cart),
-            onPressed:
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => CartScreen()),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: Icon(Icons.shopping_cart),
+                onPressed:
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => CartScreen()),
+                    ),
+              ),
+              if (cartItemCount > 0)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text(
+                      '$cartItemCount',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                 ),
+            ],
           ),
+          SizedBox(width: 8),
         ],
       ),
       body:
@@ -110,277 +141,52 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildBanner(),
-                    _buildCategorySection(),
-                    _buildSectionTitle("Newly Launched"),
-                    _buildProductGrid(products, wishlistProvider),
-                    if (recentlyViewedProducts.isNotEmpty) ...[
-                      _buildSectionTitle("Recently Viewed"),
-                      _buildProductGrid(
-                        recentlyViewedProducts,
-                        wishlistProvider,
+                    // Banner section
+                    BannerWidget(bannerUrl: bannerUrl),
+
+                    // Categories section
+                    CategoryListWidget(categories: categories),
+
+                    // Newly Launched section
+                    ProductSectionWidget(
+                      title: "Newly Launched",
+                      products: products.take(10).toList(),
+                      isHorizontal: true,
+                      onProductTap: (product) {
+                        addToRecentlyViewed(product);
+                        UIHelpers.navigateToProductDetails(context, product);
+                      },
+                      showViewAll: true,
+                    ),
+
+                    // Recently Viewed section (if any)
+                    if (recentlyViewedProducts.isNotEmpty)
+                      ProductSectionWidget(
+                        title: "Recently Viewed",
+                        products: recentlyViewedProducts,
+                        isHorizontal: true,
+                        onProductTap: (product) {
+                          UIHelpers.navigateToProductDetails(context, product);
+                        },
+                        showViewAll: true,
                       ),
-                    ],
-                    if (popularProducts.isNotEmpty) ...[
-                      _buildSectionTitle("Most Popular"),
-                      _buildProductGrid(popularProducts, wishlistProvider),
-                    ],
+
+                    // Most Popular section
+                    ProductSectionWidget(
+                      title: "Most Popular",
+                      products: popularProducts,
+                      isHorizontal: false,
+                      onProductTap: (product) {
+                        addToRecentlyViewed(product);
+                        UIHelpers.navigateToProductDetails(context, product);
+                      },
+                      showViewAll: false,
+                    ),
+
+                    SizedBox(height: 20),
                   ],
                 ),
               ),
     );
-  }
-
-  Widget _buildBanner() {
-    return Padding(
-      padding: EdgeInsets.all(10),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: CachedNetworkImage(
-          imageUrl: bannerUrl,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          placeholder:
-              (context, url) => Center(child: CircularProgressIndicator()),
-          errorWidget: (context, url, error) => Icon(Icons.error),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCategorySection() {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children:
-              categories.map((category) {
-                return Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 10),
-                  child: Column(
-                    children: [
-                      CachedNetworkImage(
-                        imageUrl:
-                            category["image"] ??
-                            "https://via.placeholder.com/50",
-                        width: 50,
-                        height: 50,
-                        errorWidget: (context, url, error) => Icon(Icons.error),
-                      ),
-                      SizedBox(height: 5),
-                      Text(
-                        category["name"] ?? "",
-                        style: TextStyle(fontSize: 12),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      child: Text(
-        title,
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
-  Widget _buildProductGrid(
-    List productList,
-    WishlistProvider wishlistProvider,
-  ) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 10),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: NeverScrollableScrollPhysics(),
-        itemCount: productList.length,
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.7,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-        ),
-        itemBuilder: (context, index) {
-          final product = productList[index];
-          final bool isWishlisted = wishlistProvider.isWishlisted(
-            product["id"],
-          );
-          final bool hasDiscount =
-              product["regular_price"].toString() !=
-              product["price"].toString();
-          final discountPercentage =
-              hasDiscount
-                  ? ((double.parse(product["regular_price"].toString()) -
-                          double.parse(product["price"].toString())) /
-                      double.parse(product["regular_price"].toString()) *
-                      100)
-                  : 0;
-
-          // Check if the product has images; if not, use a built-in fallback widget.
-          final bool hasImages =
-              product["images"] != null && product["images"].isNotEmpty;
-          final String imageUrl =
-              hasImages
-                  ? product["images"][0]["src"]
-                  : ""; // Empty string when no image available
-
-          Widget productImageWidget;
-          if (hasImages) {
-            productImageWidget = CachedNetworkImage(
-              imageUrl: imageUrl,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              placeholder:
-                  (context, url) => Center(child: CircularProgressIndicator()),
-              errorWidget: (context, url, error) => Icon(Icons.error),
-            );
-          } else {
-            productImageWidget = Container(
-              width: double.infinity,
-              height: double.infinity,
-              color: Colors.grey[300],
-              child: Icon(
-                Icons.image_not_supported,
-                size: 50,
-                color: Colors.grey[700],
-              ),
-            );
-          }
-
-          return GestureDetector(
-            onTap: () {
-              addToRecentlyViewed(product);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ProductDetailsScreen(product: product),
-                ),
-              );
-            },
-            child: Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              elevation: 3,
-              child: Stack(
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: productImageWidget),
-                      Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              product["name"] ?? "",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (hasDiscount)
-                              Wrap(
-                                spacing: 5,
-                                children: [
-                                  Text(
-                                    "₹${product["price"]}",
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.red,
-                                    ),
-                                  ),
-                                  SizedBox(width: 5),
-                                  Text(
-                                    "₹${product["regular_price"]}",
-                                    style: TextStyle(
-                                      decoration: TextDecoration.lineThrough,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  Positioned(
-                    top: 5,
-                    right: 5,
-                    child: IconButton(
-                      icon: Icon(
-                        isWishlisted ? Icons.favorite : Icons.favorite_border,
-                        color: isWishlisted ? Colors.red : Colors.grey,
-                      ),
-                      onPressed: () {
-                        final cartItem = CartItem(
-                          id: product["id"],
-                          name: product["name"],
-                          image: hasImages ? imageUrl : "",
-                          price: double.parse(product["price"].toString()),
-                          imageUrl: '',
-                        );
-
-                        if (isWishlisted) {
-                          wishlistProvider.removeFromWishlist(cartItem.id);
-                          showSnackBar(
-                            context,
-                            "${product["name"]} removed from wishlist",
-                          );
-                        } else {
-                          wishlistProvider.addToWishlist(cartItem);
-                          showSnackBar(
-                            context,
-                            "${product["name"]} added to wishlist",
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                  if (hasDiscount)
-                    Positioned(
-                      top: 5,
-                      left: 5,
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                        child: Text(
-                          "-${discountPercentage.toStringAsFixed(0)}%",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    // Clean up any resources here if needed
-    super.dispose();
   }
 }

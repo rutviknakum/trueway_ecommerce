@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:trueway_ecommerce/main.dart';
 import 'package:trueway_ecommerce/screens/orderscrren/OrderHistoryScreen.dart';
-import 'package:trueway_ecommerce/screens/home_screen.dart';
 
 class OrderConfirmationScreen extends StatelessWidget {
   final String orderId;
@@ -17,7 +17,7 @@ class OrderConfirmationScreen extends StatelessWidget {
       onWillPop: () async {
         // Navigate to home instead of going back to empty checkout
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => HomeScreen()),
+          MaterialPageRoute(builder: (context) => MainScreen()),
           (route) => false,
         );
         return false;
@@ -41,7 +41,7 @@ class OrderConfirmationScreen extends StatelessWidget {
             onPressed: () {
               // Go to home screen instead of previous screen
               Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (context) => HomeScreen()),
+                MaterialPageRoute(builder: (context) => MainScreen()),
                 (route) => false,
               );
             },
@@ -146,7 +146,7 @@ class OrderConfirmationScreen extends StatelessWidget {
                   child: ElevatedButton(
                     onPressed: () {
                       Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(builder: (context) => HomeScreen()),
+                        MaterialPageRoute(builder: (context) => MainScreen()),
                         (route) => false,
                       );
                     },

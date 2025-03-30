@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:trueway_ecommerce/models/cart_item.dart';
+import 'package:trueway_ecommerce/providers/cart_provider.dart';
 import 'package:trueway_ecommerce/providers/wishlist_provider.dart';
+import 'package:trueway_ecommerce/screens/SearchScreen.dart';
+import 'package:trueway_ecommerce/screens/cart_screen.dart';
 import 'package:trueway_ecommerce/screens/product_details_screen.dart';
 import 'package:trueway_ecommerce/services/product_service.dart';
 
@@ -11,16 +13,29 @@ class CategoriesScreen extends StatefulWidget {
   _CategoriesScreenState createState() => _CategoriesScreenState();
 }
 
-class _CategoriesScreenState extends State<CategoriesScreen> {
+class _CategoriesScreenState extends State<CategoriesScreen>
+    with SingleTickerProviderStateMixin {
   List categories = [];
   List products = [];
   int selectedCategoryId = -1;
+  String selectedCategoryName = "";
   bool isLoading = true;
+  late AnimationController _animationController;
 
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
     fetchCategoriesAndProducts();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   // Fetch categories and products on screen load
@@ -31,15 +46,18 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         setState(() {
           categories = fetchedCategories;
           selectedCategoryId = fetchedCategories[0]['id'];
+          selectedCategoryName = fetchedCategories[0]['name'];
         });
 
         // Fetch products after categories are set
-        await updateProductsForCategory(selectedCategoryId);
+        await updateProductsForCategory(
+          selectedCategoryId,
+          selectedCategoryName,
+        );
       } else {
         setState(() {
           isLoading = false;
         });
-        print("No categories found");
       }
     } catch (e) {
       setState(() {
@@ -50,7 +68,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // Update the products based on selected category
-  Future<void> updateProductsForCategory(int categoryId) async {
+  Future<void> updateProductsForCategory(
+    int categoryId,
+    String categoryName,
+  ) async {
     setState(() {
       isLoading = true;
       products = []; // Clear previous products
@@ -61,14 +82,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         categoryId,
       );
 
-      // Debug print to check product structure
-      if (fetchedProducts.isNotEmpty) {
-        print("Product sample: ${fetchedProducts[0]}");
-      }
-
       setState(() {
         products = fetchedProducts;
         selectedCategoryId = categoryId;
+        selectedCategoryName = categoryName;
         isLoading = false;
       });
     } catch (e) {
@@ -79,48 +96,175 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     }
   }
 
-  // Safe method to extract image URL from product
-  String getProductImageUrl(dynamic product) {
-    try {
-      if (product != null &&
-          product['images'] != null &&
-          product['images'] is List &&
-          product['images'].isNotEmpty &&
-          product['images'][0] != null &&
-          product['images'][0]['src'] != null) {
-        return product['images'][0]['src'];
-      }
-    } catch (e) {
-      print("Error extracting image URL: $e");
+  // Add product to cart with animation
+  void _addToCart(BuildContext context, dynamic product) {
+    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+
+    // Extract product data
+    final productId = product["id"] ?? 0;
+    final productName = product["name"] ?? 'No Name';
+    final String priceStr = product['price']?.toString() ?? '0';
+    final price = double.tryParse(priceStr) ?? 0.0;
+
+    // Extract image URL
+    String imageUrl = '';
+    if (product['images'] != null &&
+        product['images'] is List &&
+        product['images'].isNotEmpty &&
+        product['images'][0] != null &&
+        product['images'][0]['src'] != null) {
+      imageUrl = product['images'][0]['src'];
     }
-    return 'https://via.placeholder.com/150';
+
+    // Create cart item
+    final cartItem = CartItem(
+      id: productId,
+      name: productName,
+      image: imageUrl,
+      price: price,
+      quantity: 1,
+      imageUrl: imageUrl,
+    );
+
+    // Add to cart
+    cartProvider.addToCart(cartItem);
+
+    // Play animation
+    _animationController.reset();
+    _animationController.forward();
+
+    // Show confirmation
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.white),
+            SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                "$productName added to cart",
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (context) => CartScreen()));
+              },
+              child: Text(
+                "VIEW",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.black.withOpacity(0.8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: EdgeInsets.all(12),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final cartProvider = Provider.of<CartProvider>(context);
+    final cartItemCount = cartProvider.items.length;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text("Category", style: TextStyle(fontWeight: FontWeight.bold)),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        title: Text(
+          "Category",
+          style: TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.bold,
+            fontSize: 28,
+          ),
+        ),
         actions: [
           IconButton(
-            icon: Icon(Icons.search),
+            icon: Icon(Icons.search, color: Colors.grey[500], size: 28),
             onPressed: () {
-              // Implement search functionality
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => SearchScreen()),
+              );
             },
           ),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: AnimatedBuilder(
+                  animation: _animationController,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: 1.0 + _animationController.value * 0.3,
+                      child: Icon(
+                        Icons.shopping_cart_outlined,
+                        color: Colors.grey[500],
+                        size: 28,
+                      ),
+                    );
+                  },
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => CartScreen()),
+                  );
+                },
+              ),
+              if (cartItemCount > 0)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: BoxConstraints(minWidth: 18, minHeight: 18),
+                    child: Text(
+                      '$cartItemCount',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          SizedBox(width: 8),
         ],
       ),
       body:
           isLoading
-              ? Center(child: CircularProgressIndicator())
+              ? Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                ),
+              )
               : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Left side: Categories list
-                  Container(
-                    width: 120,
-                    color: Colors.grey[50],
-                    padding: EdgeInsets.symmetric(vertical: 10, horizontal: 5),
+                  SizedBox(
+                    width: 100,
                     child: ListView.builder(
+                      padding: EdgeInsets.symmetric(vertical: 10),
                       itemCount: categories.length,
                       itemBuilder: (context, index) {
                         final category = categories[index];
@@ -128,38 +272,42 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
                         return GestureDetector(
                           onTap: () {
-                            updateProductsForCategory(category['id']);
+                            updateProductsForCategory(
+                              category['id'],
+                              category['name'],
+                            );
                           },
                           child: Container(
-                            margin: EdgeInsets.symmetric(vertical: 8),
-                            padding: EdgeInsets.all(8),
+                            padding: EdgeInsets.symmetric(
+                              vertical: 16,
+                              horizontal: 10,
+                            ),
                             decoration: BoxDecoration(
-                              color:
-                                  isSelected
-                                      ? Colors.orangeAccent
-                                      : Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                              boxShadow:
-                                  isSelected
-                                      ? [
-                                        BoxShadow(
-                                          color: Colors.black12,
-                                          blurRadius: 3,
-                                          offset: Offset(0, 2),
-                                        ),
-                                      ]
-                                      : null,
+                              color: Colors.white,
+                              border: Border(
+                                left: BorderSide(
+                                  color:
+                                      isSelected
+                                          ? Colors.orange
+                                          : Colors.transparent,
+                                  width: 3,
+                                ),
+                              ),
                             ),
                             child: Text(
-                              category['name'] ?? 'Unknown Category',
+                              category['name'] ?? 'Unknown',
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: 15,
+                                color:
+                                    isSelected ? Colors.orange : Colors.black87,
                                 fontWeight:
                                     isSelected
                                         ? FontWeight.bold
                                         : FontWeight.normal,
                               ),
-                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.left,
                             ),
                           ),
                         );
@@ -167,327 +315,347 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     ),
                   ),
 
-                  // Right side: Products grid
+                  // Right side: Products
                   Expanded(
-                    child:
-                        products.isEmpty && !isLoading
-                            ? Center(
-                              child: Text(
-                                'No products found for this category.',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+                    child: Container(
+                      color: Colors.grey[100],
+                      child: Column(
+                        children: [
+                          // Category Header with "View All" link
+                          Container(
+                            color: Colors.grey[100],
+                            padding: EdgeInsets.all(16),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    selectedCategoryName,
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                              ),
-                            )
-                            : GridView.builder(
-                              padding: EdgeInsets.all(10),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
-                                    childAspectRatio:
-                                        1.04, // Calculated ideal aspect ratio
-                                    crossAxisSpacing: 8,
-                                    mainAxisSpacing: 8,
-                                  ),
-                              itemCount: products.length,
-                              itemBuilder: (context, index) {
-                                final product = products[index];
-                                final wishlistProvider =
-                                    Provider.of<WishlistProvider>(
-                                      context,
-                                      listen: false,
-                                    );
-
-                                // Handle product data with null safety
-                                final productId = product["id"] ?? 0;
-                                final productName =
-                                    product["name"] ?? 'No Name';
-                                final bool isWishlisted = wishlistProvider
-                                    .isWishlisted(productId);
-
-                                // Handle prices safely
-                                final String priceStr =
-                                    product['price']?.toString() ?? '0';
-                                final String regularPriceStr =
-                                    product['regular_price']?.toString() ?? '0';
-                                final price = double.tryParse(priceStr) ?? 0.0;
-                                final regularPrice =
-                                    double.tryParse(regularPriceStr) ?? 0.0;
-
-                                final hasDiscount =
-                                    regularPrice > 0 && regularPrice != price;
-                                final discountPercentage =
-                                    hasDiscount
-                                        ? ((regularPrice - price) /
-                                                regularPrice) *
-                                            100
-                                        : 0;
-
-                                // Get product image safely
-                                final productImage = getProductImageUrl(
-                                  product,
-                                );
-
-                                return GestureDetector(
+                                GestureDetector(
                                   onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder:
-                                            (context) => ProductDetailsScreen(
-                                              product: product,
-                                            ),
-                                      ),
-                                    );
+                                    // Navigate to view all products for this category
                                   },
-                                  child: Card(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    elevation: 2,
-                                    margin: EdgeInsets.zero,
-                                    child: Stack(
-                                      children: [
-                                        Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            // Image container with fixed height
-                                            Container(
-                                              height:
-                                                  110, // Further reduced height to prevent overflow
-                                              width: double.infinity,
-                                              decoration: BoxDecoration(
-                                                borderRadius: BorderRadius.only(
-                                                  topLeft: Radius.circular(10),
-                                                  topRight: Radius.circular(10),
-                                                ),
-                                              ),
-                                              child: ClipRRect(
-                                                borderRadius: BorderRadius.only(
-                                                  topLeft: Radius.circular(10),
-                                                  topRight: Radius.circular(10),
-                                                ),
-                                                child: CachedNetworkImage(
-                                                  imageUrl: productImage,
-                                                  fit: BoxFit.cover,
-                                                  placeholder:
-                                                      (
-                                                        context,
-                                                        url,
-                                                      ) => Container(
-                                                        color: Colors.grey[200],
-                                                        child: Center(
-                                                          child: SizedBox(
-                                                            width: 20,
-                                                            height: 20,
-                                                            child:
-                                                                CircularProgressIndicator(
-                                                                  strokeWidth:
-                                                                      2,
-                                                                ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                  errorWidget:
-                                                      (
-                                                        context,
-                                                        url,
-                                                        error,
-                                                      ) => Container(
-                                                        color: Colors.grey[200],
-                                                        child: Icon(
-                                                          Icons
-                                                              .image_not_supported,
-                                                          size: 30,
-                                                        ),
-                                                      ),
-                                                ),
-                                              ),
-                                            ),
-
-                                            // Product details
-                                            Padding(
-                                              padding: EdgeInsets.all(
-                                                6,
-                                              ), // Reduced padding
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    productName,
-                                                    style: TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize:
-                                                          12, // Smaller font size
-                                                    ),
-                                                    maxLines: 1, // Only 1 line
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                  SizedBox(
-                                                    height: 1,
-                                                  ), // Minimal spacing
-                                                  if (hasDiscount)
-                                                    Row(
-                                                      children: [
-                                                        Text(
-                                                          "₹$price",
-                                                          style: TextStyle(
-                                                            fontSize:
-                                                                12, // Smaller font
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            color: Color.fromRGBO(
-                                                              29,
-                                                              27,
-                                                              32,
-                                                              1,
-                                                            ), // Using your color code
-                                                          ),
-                                                        ),
-                                                        SizedBox(width: 3),
-                                                        Text(
-                                                          "₹$regularPrice",
-                                                          style: TextStyle(
-                                                            fontSize:
-                                                                10, // Smaller font
-                                                            decoration:
-                                                                TextDecoration
-                                                                    .lineThrough,
-                                                            color: Colors.grey,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    )
-                                                  else
-                                                    Text(
-                                                      "₹$price",
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        color: Color.fromRGBO(
-                                                          29,
-                                                          27,
-                                                          32,
-                                                          1,
-                                                        ), // Using your color code
-                                                      ),
-                                                    ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-
-                                        // Wishlist button
-                                        Positioned(
-                                          top: 5,
-                                          right: 5,
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withOpacity(
-                                                0.7,
-                                              ),
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: IconButton(
-                                              icon: Icon(
-                                                isWishlisted
-                                                    ? Icons.favorite
-                                                    : Icons.favorite_border,
-                                                color:
-                                                    isWishlisted
-                                                        ? Colors.red
-                                                        : Colors.grey,
-                                                size: 18, // Smaller icon
-                                              ),
-                                              onPressed: () {
-                                                try {
-                                                  final cartItem = CartItem(
-                                                    id: productId,
-                                                    name: productName,
-                                                    image: productImage,
-                                                    price: price,
-                                                    imageUrl: productImage,
-                                                  );
-
-                                                  if (isWishlisted) {
-                                                    wishlistProvider
-                                                        .removeFromWishlist(
-                                                          cartItem.id,
-                                                        );
-                                                    _showSnackBar(
-                                                      context,
-                                                      "$productName removed from wishlist",
-                                                    );
-                                                  } else {
-                                                    wishlistProvider
-                                                        .addToWishlist(
-                                                          cartItem,
-                                                        );
-                                                    _showSnackBar(
-                                                      context,
-                                                      "$productName added to wishlist",
-                                                    );
-                                                  }
-                                                } catch (e) {
-                                                  print(
-                                                    "Error handling wishlist: $e",
-                                                  );
-                                                }
-                                              },
-                                            ),
-                                          ),
-                                        ),
-
-                                        // Discount label
-                                        if (hasDiscount)
-                                          Positioned(
-                                            top: 5,
-                                            left: 5,
-                                            child: Container(
-                                              padding: EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 4,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.red,
-                                                borderRadius:
-                                                    BorderRadius.circular(5),
-                                              ),
-                                              child: Text(
-                                                "-${discountPercentage.toStringAsFixed(0)}%",
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                      ],
+                                  child: Text(
+                                    "View All",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
-                                );
-                              },
+                                ),
+                              ],
                             ),
+                          ),
+
+                          // Products List
+                          Expanded(
+                            child:
+                                products.isEmpty && !isLoading
+                                    ? Center(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.category_outlined,
+                                            size: 64,
+                                            color: Colors.grey[400],
+                                          ),
+                                          SizedBox(height: 16),
+                                          Text(
+                                            'No products found',
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.grey[700],
+                                            ),
+                                          ),
+                                          SizedBox(height: 8),
+                                          Text(
+                                            'Try selecting a different category',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                    : ListView.builder(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                      ),
+                                      itemCount: products.length,
+                                      itemBuilder: (context, index) {
+                                        return _buildProductListItem(
+                                          context,
+                                          products[index],
+                                        );
+                                      },
+                                    ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
     );
   }
 
-  void _showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
+  Widget _buildProductListItem(BuildContext context, dynamic product) {
+    final wishlistProvider = Provider.of<WishlistProvider>(
+      context,
+      listen: false,
+    );
+
+    // Extract product data safely
+    final productId = product["id"] ?? 0;
+    final productName = product["name"] ?? 'No Name';
+    wishlistProvider.isWishlisted(productId);
+
+    // Handle prices safely
+    final String priceStr = product['price']?.toString() ?? '0';
+    final String regularPriceStr = product['regular_price']?.toString() ?? '0';
+    final price = double.tryParse(priceStr) ?? 0.0;
+    final regularPrice = double.tryParse(regularPriceStr) ?? 0.0;
+
+    final hasDiscount = regularPrice > 0 && regularPrice != price;
+    final discountPercentage =
+        hasDiscount ? ((regularPrice - price) / regularPrice) * 100 : 0;
+
+    // Extract image URL safely
+    String imageUrl = '';
+    if (product['images'] != null &&
+        product['images'] is List &&
+        product['images'].isNotEmpty &&
+        product['images'][0] != null &&
+        product['images'][0]['src'] != null) {
+      imageUrl = product['images'][0]['src'];
+    }
+
+    // Check if product is in stock
+    final bool inStock = product['in_stock'] ?? true;
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductDetailsScreen(product: product),
+          ),
+        );
+      },
+      child: Container(
+        margin: EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 4,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(15),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Product Image with Discount Label
+              Stack(
+                children: [
+                  // Product Image
+                  Hero(
+                    tag: 'product_$productId',
+                    child: Container(
+                      width: 110,
+                      height: 110,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child:
+                          imageUrl.isNotEmpty
+                              ? ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  imageUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Center(
+                                      child: Icon(
+                                        Icons.image_not_supported,
+                                        size: 30,
+                                        color: Colors.grey[400],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              )
+                              : Center(
+                                child: Icon(
+                                  Icons.image_not_supported,
+                                  size: 30,
+                                  color: Colors.grey[400],
+                                ),
+                              ),
+                    ),
+                  ),
+
+                  // Discount Label
+                  if (hasDiscount)
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(8),
+                            bottomRight: Radius.circular(8),
+                          ),
+                        ),
+                        child: Text(
+                          "-${discountPercentage.toStringAsFixed(0)}%",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+
+              SizedBox(width: 15),
+
+              // Product Details
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Product Name
+                    Text(
+                      productName.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                        height: 1.3,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+
+                    SizedBox(height: 10),
+
+                    // Price Display - Wrapped in FittedBox to prevent overflow
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        children: [
+                          Text(
+                            "₹${price.toInt()}",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
+                          ),
+                          if (hasDiscount) ...[
+                            SizedBox(width: 8),
+                            Text(
+                              "₹${regularPrice.toInt()}",
+                              style: TextStyle(
+                                fontSize: 14,
+                                decoration: TextDecoration.lineThrough,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    SizedBox(height: 10),
+
+                    // Stock Status
+                    Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: inStock ? Colors.green : Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          inStock ? "In stock" : "Out of stock",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: inStock ? Colors.green : Colors.red,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    SizedBox(height: 10),
+
+                    // Add to Cart Button
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap:
+                            inStock ? () => _addToCart(context, product) : null,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          height: 36,
+                          width: 36,
+                          decoration: BoxDecoration(
+                            color: inStock ? Colors.white : Colors.grey[200],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color:
+                                  inStock
+                                      ? Colors.grey[300]!
+                                      : Colors.grey[300]!,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.shopping_cart_outlined,
+                            size: 18,
+                            color: inStock ? Colors.black87 : Colors.grey[400],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -108,9 +108,7 @@ class ProductService {
   }
 
   /// Fetches products by category ID
-  static Future<List<Map<String, dynamic>>> fetchProductsByCategory(
-    int categoryId,
-  ) async {
+  static Future<List<dynamic>> fetchProductsByCategory(int categoryId) async {
     final url = Uri.parse(
       "$baseUrl/products?category=$categoryId&consumer_key=$consumerKey&consumer_secret=$consumerSecret",
     );
@@ -128,17 +126,27 @@ class ProductService {
         }
 
         List<dynamic> products = decodedResponse;
-        return products.map<Map<String, dynamic>>((product) {
-          return {
-            "id": product["id"] ?? 0,
-            "name": product["name"] ?? "No Name",
-            "price": product["price"]?.toString() ?? "0",
-            "image":
-                (product["images"] != null && product["images"].isNotEmpty)
-                    ? product["images"][0]["src"]
-                    : "https://via.placeholder.com/150", // Default image
-          };
-        }).toList();
+
+        // Keep the original structure but ensure images exist
+        for (var product in products) {
+          if (product["images"] == null ||
+              !(product["images"] is List) ||
+              product["images"].isEmpty) {
+            // Add a default image if none exists
+            product["images"] = [
+              {"src": "https://via.placeholder.com/150"},
+            ];
+          }
+        }
+
+        // Log the first product for debugging
+        if (products.isNotEmpty) {
+          print("Product structure sample:");
+          print("Name: ${products[0]["name"]}");
+          print("Images: ${products[0]["images"]}");
+        }
+
+        return products;
       } else {
         throw Exception(
           "Failed to load products. Status Code: ${response.statusCode}",
@@ -150,10 +158,9 @@ class ProductService {
   }
 
   /// Fetches all products grouped by category
-  static Future<Map<String, List<Map<String, dynamic>>>>
-  fetchAllProductsByCategory() async {
+  static Future<Map<String, List<dynamic>>> fetchAllProductsByCategory() async {
     final categories = await fetchCategories(); // Fetch all categories
-    Map<String, List<Map<String, dynamic>>> categorizedProducts = {};
+    Map<String, List<dynamic>> categorizedProducts = {};
 
     for (var category in categories) {
       int categoryId = category['id'];
