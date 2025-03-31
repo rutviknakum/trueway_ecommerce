@@ -1,7 +1,7 @@
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
-import 'package:trueway_ecommerce/screens/orderscrren/OrderDetailsScreen.dart';
+import 'package:trueway_ecommerce/screens/Order_scrren/OrderDetailsScreen.dart';
 import '../../services/order_service.dart';
 
 class OrderHistoryScreen extends StatefulWidget {

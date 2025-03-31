@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:trueway_ecommerce/main.dart';
-import '../signup_screen.dart';
+import 'package:trueway_ecommerce/screens/main_screen.dart';
+import 'package:trueway_ecommerce/screens/signup_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
 
@@ -22,7 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = true;
       });
 
-      var response = await AuthService().loginUser(
+      await AuthService().loginUser(
         emailController.text,
         passwordController.text,
       );
@@ -31,16 +31,10 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = false;
       });
 
-      if (response != null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => MainScreen()),
-        );
-      } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Login failed")));
-      }
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => MainScreen()),
+      );
     }
   }
 

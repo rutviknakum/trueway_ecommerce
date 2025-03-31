@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:trueway_ecommerce/screens/CheckoutScreens/PreviewScreen.dart';
+import 'package:trueway_ecommerce/screens/Checkout_Screens/PreviewScreen.dart';
 
 class ShippingScreen extends StatefulWidget {
   final Map<String, String> shippingAddress;

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'screens/login_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'services/auth_service.dart';
+import 'package:trueway_ecommerce/screens/login_screen.dart';
+import 'package:trueway_ecommerce/services/auth_service.dart';
 
 class SignupScreen extends StatefulWidget {
   @override
@@ -22,7 +22,7 @@ class _SignupScreenState extends State<SignupScreen> {
         _isLoading = true;
       });
 
-      var response = await AuthService().signupUser(
+      await AuthService().signupUser(
         nameController.text,
         emailController.text,
         passwordController.text,
@@ -32,19 +32,13 @@ class _SignupScreenState extends State<SignupScreen> {
         _isLoading = false;
       });
 
-      if (response != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Account Created Successfully!")),
-        );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => LoginScreen()),
-        );
-      } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Signup failed. Try again.")));
-      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Account Created Successfully!")));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => LoginScreen()),
+      );
     }
   }
 

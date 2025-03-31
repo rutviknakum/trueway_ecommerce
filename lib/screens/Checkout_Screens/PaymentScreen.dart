@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:trueway_ecommerce/providers/cart_provider.dart';
-import 'package:trueway_ecommerce/screens/orderscrren/OrderConfirmationScreen.dart';
+import 'package:trueway_ecommerce/screens/Order_scrren/OrderConfirmationScreen.dart';
 import 'package:trueway_ecommerce/services/order_service.dart';
 
 class PaymentScreen extends StatefulWidget {

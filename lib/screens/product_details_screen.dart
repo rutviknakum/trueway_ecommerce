@@ -4,7 +4,7 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:provider/provider.dart';
 import 'package:trueway_ecommerce/models/cart_item.dart';
 import 'package:trueway_ecommerce/providers/cart_provider.dart';
-import 'package:trueway_ecommerce/screens/CheckoutScreens/AddressScreen.dart';
+import 'package:trueway_ecommerce/screens/Checkout_Screens/AddressScreen.dart';
 import 'package:trueway_ecommerce/screens/cart_screen.dart';
 
 class ProductDetailsScreen extends StatefulWidget {

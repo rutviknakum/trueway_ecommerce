@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:trueway_ecommerce/screens/CheckoutScreens/AddressScreen.dart';
+import 'package:trueway_ecommerce/screens/Checkout_Screens/AddressScreen.dart';
 import '../providers/cart_provider.dart';
 
 class CartScreen extends StatelessWidget {

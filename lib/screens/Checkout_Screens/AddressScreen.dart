@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:trueway_ecommerce/screens/CheckoutScreens/ShippingScreen.dart';
+import 'package:trueway_ecommerce/screens/Checkout_Screens/ShippingScreen.dart';
 
 class AddressScreen extends StatefulWidget {
   @override

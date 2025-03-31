@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:trueway_ecommerce/main.dart';
 import 'package:trueway_ecommerce/providers/wishlist_provider.dart';
 import 'package:trueway_ecommerce/providers/cart_provider.dart';
 import 'package:trueway_ecommerce/screens/SearchScreen.dart';
+import 'package:trueway_ecommerce/screens/main_screen.dart';
 
 class WishlistScreen extends StatelessWidget {
   @override

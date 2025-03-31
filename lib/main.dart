@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:trueway_ecommerce/providers/navigation_provider.dart';
 import 'package:trueway_ecommerce/providers/order_provider.dart';
+import 'package:trueway_ecommerce/providers/user_provider.dart';
+import 'package:trueway_ecommerce/utils/app_routes.dart';
+import 'package:trueway_ecommerce/utils/route_manager.dart';
+import 'package:trueway_ecommerce/providers/cart_provider.dart';
 import 'package:trueway_ecommerce/providers/wishlist_provider.dart';
-import 'package:trueway_ecommerce/screens/Setting_screen.dart';
-import 'package:trueway_ecommerce/screens/WishlistScreen.dart';
-import 'package:trueway_ecommerce/screens/categories_screen.dart';
-import 'package:trueway_ecommerce/screens/home_screen.dart';
-import 'package:trueway_ecommerce/screens/cart_screen.dart';
-import 'package:trueway_ecommerce/widgets/bottom_navigation_bar.dart';
-import 'providers/cart_provider.dart';
+import 'package:trueway_ecommerce/providers/theme_provider.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  RouteManager.init();
   runApp(MyApp());
 }
 
@@ -19,63 +20,61 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (context) => CartProvider()),
-        ChangeNotifierProvider(create: (context) => WishlistProvider()),
-        ChangeNotifierProvider(create: (context) => OrderProvider()),
+        ChangeNotifierProvider(create: (ctx) => ThemeProvider()),
+        ChangeNotifierProvider(create: (ctx) => CartProvider()),
+        ChangeNotifierProvider(create: (ctx) => OrderProvider()),
+        ChangeNotifierProvider(create: (ctx) => UserProvider()),
+        ChangeNotifierProvider(create: (ctx) => NavigationProvider()),
+        ChangeNotifierProvider(create: (ctx) => WishlistProvider()),
       ],
-      child: MaterialApp(debugShowCheckedModeBanner: false, home: MainScreen()),
-    );
-  }
-}
+      child: Consumer<ThemeProvider>(
+        builder: (ctx, themeProvider, _) {
+          return MaterialApp(
+            title: 'Trueway E-Commerce',
+            debugShowCheckedModeBanner: false,
+            theme: ThemeData(
+              primarySwatch: Colors.blue,
+              colorScheme: ColorScheme.fromSwatch(
+                primarySwatch: Colors.blue,
+                accentColor: Colors.orange,
+              ),
+              scaffoldBackgroundColor: Colors.white,
+              appBarTheme: AppBarTheme(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black87,
+                elevation: 0,
+                iconTheme: IconThemeData(color: Colors.black87),
+              ),
+            ),
+            darkTheme: ThemeData(
+              brightness: Brightness.dark,
+              primarySwatch: Colors.blue,
+              colorScheme: ColorScheme.dark(
+                primary: Colors.blue,
+                secondary: Colors.orange,
+              ),
+              scaffoldBackgroundColor: Colors.grey[900],
+              appBarTheme: AppBarTheme(
+                backgroundColor: Colors.grey[900],
+                foregroundColor: Colors.white,
+                elevation: 0,
+              ),
+            ),
+            themeMode:
+                themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
 
-class MainScreen extends StatefulWidget {
-  @override
-  _MainScreenState createState() => _MainScreenState();
-}
+            // Set up route system
+            initialRoute: AppRoutes.initial,
+            navigatorKey: RouteManager.navigatorKey,
+            navigatorObservers: [RouteManager.getRouteObserver()],
 
-class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0;
-  List<Map<String, dynamic>> wishlist = []; // Store wishlist in MainScreen
+            // Define static routes
+            routes: AppRoutes.getRoutes(),
 
-  void toggleWishlist(Map<String, dynamic> product) {
-    setState(() {
-      final isWishlisted = wishlist.any((item) => item["id"] == product["id"]);
-
-      if (isWishlisted) {
-        wishlist.removeWhere((item) => item["id"] == product["id"]);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("${product['name']} removed from Wishlist")),
-        );
-      } else {
-        wishlist.add(product);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("${product['name']} added to Wishlist")),
-        );
-      }
-    });
-  }
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final List<Widget> _screens = [
-      HomeScreen(),
-      CategoriesScreen(),
-      CartScreen(),
-      SettingsScreen(),
-      WishlistScreen(),
-    ];
-
-    return Scaffold(
-      body: _screens[_selectedIndex],
-      bottomNavigationBar: BottomNavigation(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
+            // Dynamic route handling
+            onGenerateRoute: AppRoutes.generateRoute,
+          );
+        },
       ),
     );
   }

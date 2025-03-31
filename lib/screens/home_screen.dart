@@ -9,6 +9,7 @@ import 'package:trueway_ecommerce/widgets/home/banner_widget.dart';
 import 'package:trueway_ecommerce/widgets/home/category_list_widget.dart';
 import 'package:trueway_ecommerce/widgets/home/product_section_widget.dart';
 import 'package:trueway_ecommerce/utils/ui_helpers.dart';
+import 'package:trueway_ecommerce/widgets/app_drawer.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -134,57 +135,70 @@ class _HomeScreenState extends State<HomeScreen> {
           SizedBox(width: 8),
         ],
       ),
+      // Use the enhanced dynamic drawer
+      drawer: AppDrawer(),
       body:
           isLoading
               ? Center(child: CircularProgressIndicator())
-              : SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Banner section
-                    BannerWidget(bannerUrl: bannerUrl),
+              : RefreshIndicator(
+                onRefresh: () async {
+                  // Implement pull-to-refresh
+                  setState(() => isLoading = true);
+                  fetchHomeData();
+                },
+                child: SingleChildScrollView(
+                  physics: AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Banner section
+                      BannerWidget(bannerUrl: bannerUrl),
 
-                    // Categories section
-                    CategoryListWidget(categories: categories),
+                      // Categories section
+                      CategoryListWidget(categories: categories),
 
-                    // Newly Launched section
-                    ProductSectionWidget(
-                      title: "Newly Launched",
-                      products: products.take(10).toList(),
-                      isHorizontal: true,
-                      onProductTap: (product) {
-                        addToRecentlyViewed(product);
-                        UIHelpers.navigateToProductDetails(context, product);
-                      },
-                      showViewAll: true,
-                    ),
-
-                    // Recently Viewed section (if any)
-                    if (recentlyViewedProducts.isNotEmpty)
+                      // Newly Launched section
                       ProductSectionWidget(
-                        title: "Recently Viewed",
-                        products: recentlyViewedProducts,
+                        title: "Newly Launched",
+                        products: products.take(10).toList(),
                         isHorizontal: true,
                         onProductTap: (product) {
+                          addToRecentlyViewed(product);
                           UIHelpers.navigateToProductDetails(context, product);
                         },
                         showViewAll: true,
                       ),
 
-                    // Most Popular section
-                    ProductSectionWidget(
-                      title: "Most Popular",
-                      products: popularProducts,
-                      isHorizontal: false,
-                      onProductTap: (product) {
-                        addToRecentlyViewed(product);
-                        UIHelpers.navigateToProductDetails(context, product);
-                      },
-                      showViewAll: false,
-                    ),
+                      // Recently Viewed section (if any)
+                      if (recentlyViewedProducts.isNotEmpty)
+                        ProductSectionWidget(
+                          title: "Recently Viewed",
+                          products: recentlyViewedProducts,
+                          isHorizontal: true,
+                          onProductTap: (product) {
+                            UIHelpers.navigateToProductDetails(
+                              context,
+                              product,
+                            );
+                          },
+                          showViewAll: true,
+                        ),
 
-                    SizedBox(height: 20),
-                  ],
+                      // Most Popular section
+                      ProductSectionWidget(
+                        title: "Most Popular",
+                        products: popularProducts,
+                        isHorizontal: false,
+                        onProductTap: (product) {
+                          addToRecentlyViewed(product);
+                          UIHelpers.navigateToProductDetails(context, product);
+                        },
+                        showViewAll: false,
+                      ),
+
+                      SizedBox(height: 20),
+                    ],
+                  ),
                 ),
               ),
     );

@@ -20,6 +20,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
   int selectedCategoryId = -1;
   String selectedCategoryName = "";
   bool isLoading = true;
+  bool _isMounted = true; // Track if the widget is mounted
   late AnimationController _animationController;
 
   @override
@@ -34,6 +35,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
 
   @override
   void dispose() {
+    _isMounted = false; // Set mounted flag to false
     _animationController.dispose();
     super.dispose();
   }
@@ -42,12 +44,17 @@ class _CategoriesScreenState extends State<CategoriesScreen>
   void fetchCategoriesAndProducts() async {
     try {
       final fetchedCategories = await ProductService.fetchCategories();
+      if (!_isMounted) return; // Check if still mounted
+
       if (fetchedCategories.isNotEmpty) {
-        setState(() {
-          categories = fetchedCategories;
-          selectedCategoryId = fetchedCategories[0]['id'];
-          selectedCategoryName = fetchedCategories[0]['name'];
-        });
+        if (mounted) {
+          // Check mounted property
+          setState(() {
+            categories = fetchedCategories;
+            selectedCategoryId = fetchedCategories[0]['id'];
+            selectedCategoryName = fetchedCategories[0]['name'];
+          });
+        }
 
         // Fetch products after categories are set
         await updateProductsForCategory(
@@ -55,14 +62,20 @@ class _CategoriesScreenState extends State<CategoriesScreen>
           selectedCategoryName,
         );
       } else {
+        if (mounted) {
+          // Check mounted property
+          setState(() {
+            isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        // Check mounted property
         setState(() {
           isLoading = false;
         });
       }
-    } catch (e) {
-      setState(() {
-        isLoading = false;
-      });
       print("Error fetching data: $e");
     }
   }
@@ -72,6 +85,8 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     int categoryId,
     String categoryName,
   ) async {
+    if (!mounted) return; // Early return if widget is not mounted
+
     setState(() {
       isLoading = true;
       products = []; // Clear previous products
@@ -82,16 +97,22 @@ class _CategoriesScreenState extends State<CategoriesScreen>
         categoryId,
       );
 
-      setState(() {
-        products = fetchedProducts;
-        selectedCategoryId = categoryId;
-        selectedCategoryName = categoryName;
-        isLoading = false;
-      });
+      // Check if widget is still mounted before updating state
+      if (mounted) {
+        setState(() {
+          products = fetchedProducts;
+          selectedCategoryId = categoryId;
+          selectedCategoryName = categoryName;
+          isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        isLoading = false;
-      });
+      // Check if widget is still mounted before updating state
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
       print("Error fetching products for category: $e");
     }
   }

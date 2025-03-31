@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:trueway_ecommerce/main.dart';
-import 'package:trueway_ecommerce/screens/orderscrren/OrderHistoryScreen.dart';
+import 'package:trueway_ecommerce/screens/Order_scrren/OrderHistoryScreen.dart';
+import 'package:trueway_ecommerce/screens/main_screen.dart';
 
 class OrderConfirmationScreen extends StatelessWidget {
   final String orderId;

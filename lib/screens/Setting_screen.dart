@@ -1,8 +1,12 @@
 // ignore_for_file: sort_child_properties_last
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:trueway_ecommerce/providers/theme_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({Key? key}) : super(key: key);
+
   @override
   _SettingsScreenState createState() => _SettingsScreenState();
 }
@@ -27,7 +31,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) {
         return Container(
           height: 250,
-          padding: EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -36,10 +40,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
+                  color:
+                      Theme.of(context).brightness == Brightness.light
+                          ? Colors.grey[800]
+                          : Colors.grey[200],
                 ),
               ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               // List of languages
               Expanded(
                 child: ListView.builder(
@@ -47,6 +54,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   itemBuilder: (context, index) {
                     return ListTile(
                       title: Text(_languages[index]),
+                      trailing:
+                          _selectedLanguage == _languages[index]
+                              ? Icon(
+                                Icons.check,
+                                color: Theme.of(context).colorScheme.primary,
+                              )
+                              : null,
                       onTap: () {
                         setState(() {
                           _selectedLanguage =
@@ -62,26 +76,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         );
       },
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    // Removed unused variable 'cardBackgroundColor'
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
           "Settings",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
+          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.white,
         elevation: 2,
-        iconTheme: IconThemeData(color: Colors.black),
       ),
       body: Padding(
-        padding: EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Theme Toggle
+            Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 4,
+              child: SwitchListTile(
+                secondary: Icon(
+                  isDarkMode ? Icons.dark_mode : Icons.light_mode,
+                  color: primaryColor,
+                ),
+                title: Text("Dark Mode"),
+                value: isDarkMode,
+                onChanged: (_) {
+                  themeProvider.toggleTheme();
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+
             // Notifications Toggle
             Card(
               shape: RoundedRectangleBorder(
@@ -89,10 +131,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               elevation: 4,
               child: ListTile(
-                leading: Icon(Icons.notifications, color: Colors.green),
-                title: Text("Get Notifications"),
+                leading: Icon(Icons.notifications, color: primaryColor),
+                title: const Text("Get Notifications"),
                 trailing: Switch(
                   value: _isNotificationsEnabled,
+                  activeColor: primaryColor,
                   onChanged: (bool value) {
                     setState(() {
                       _isNotificationsEnabled = value;
@@ -101,7 +144,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
 
             // Notification Messages
             Card(
@@ -110,69 +153,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               elevation: 4,
               child: ListTile(
-                leading: Icon(Icons.message, color: Colors.green),
-                title: Text("Notification Messages"),
-                trailing: Icon(Icons.arrow_forward_ios),
+                leading: Icon(Icons.message, color: primaryColor),
+                title: const Text("Notification Messages"),
+                trailing: const Icon(Icons.arrow_forward_ios),
+                onTap: () {
+                  // Handle navigation to notification messages
+                },
               ),
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
+
             Card(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
               elevation: 4,
               child: ListTile(
-                leading: Icon(Icons.language, color: Colors.green),
-                title: Text(
-                  "Languages",
-                  // style: TextStyle( fontSize: 18),
-                ),
+                leading: Icon(Icons.language, color: primaryColor),
+                title: const Text("Languages"),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(_selectedLanguage, style: TextStyle(fontSize: 16)),
-                    SizedBox(width: 20),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      //  size: 16,
-                      // color: Colors.black,
+                    Text(
+                      _selectedLanguage,
+                      style: const TextStyle(fontSize: 16),
                     ),
+                    const SizedBox(width: 20),
+                    const Icon(Icons.arrow_forward_ios, size: 16),
                   ],
                 ),
                 onTap: _selectLanguage, // Open language selection
               ),
             ),
-
-            // Languages - Prominent Look
-            // Container(
-            //   width: double.infinity,
-            //   padding: EdgeInsets.all(16.0),
-            //   decoration: BoxDecoration(
-            //     color: Colors.greenAccent.withOpacity(0.1),
-            //     borderRadius: BorderRadius.circular(12),
-            //     border: Border.all(color: Colors.greenAccent, width: 2),
-            //   ),
-            //   child: ListTile(
-            //     leading: Icon(Icons.language, color: Colors.green),
-            //     title: Text(
-            //       "Languages",
-            //       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            //     ),
-            //     trailing: Row(
-            //       mainAxisSize: MainAxisSize.min,
-            //       children: [
-            //         Text(_selectedLanguage, style: TextStyle(fontSize: 16)),
-            //         Icon(
-            //           Icons.arrow_forward_ios,
-            //           size: 16,
-            //           color: Colors.black,
-            //         ),
-            //       ],
-            //     ),
-            //     onTap: _selectLanguage, // Open language selection
-            //   ),
-            // ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
 
             // Privacy and Terms
             Card(
@@ -181,12 +194,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               elevation: 4,
               child: ListTile(
-                leading: Icon(Icons.lock, color: Colors.green),
-                title: Text("Privacy and Term"),
-                trailing: Icon(Icons.arrow_forward_ios),
+                leading: Icon(Icons.lock, color: primaryColor),
+                title: const Text("Privacy and Term"),
+                trailing: const Icon(Icons.arrow_forward_ios),
+                onTap: () {
+                  // Handle navigation to privacy and terms
+                },
               ),
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
 
             // About Us
             Card(
@@ -195,12 +211,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               elevation: 4,
               child: ListTile(
-                leading: Icon(Icons.info, color: Colors.green),
-                title: Text("About Us"),
-                trailing: Icon(Icons.arrow_forward_ios),
+                leading: Icon(Icons.info, color: primaryColor),
+                title: const Text("About Us"),
+                trailing: const Icon(Icons.arrow_forward_ios),
+                onTap: () {
+                  // Handle navigation to about us
+                },
               ),
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
 
             // Rate the app
             Card(
@@ -209,12 +228,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               elevation: 4,
               child: ListTile(
-                leading: Icon(Icons.star, color: Colors.green),
-                title: Text("Rate the app"),
-                trailing: Icon(Icons.arrow_forward_ios),
+                leading: Icon(Icons.star, color: primaryColor),
+                title: const Text("Rate the app"),
+                trailing: const Icon(Icons.arrow_forward_ios),
+                onTap: () {
+                  // Handle rate the app action
+                },
               ),
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
           ],
         ),
       ),
@@ -222,8 +244,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         onPressed: () {
           // Add custom action for FAB
         },
-        child: Icon(Icons.message),
-        backgroundColor: Colors.green,
+        child: const Icon(Icons.message),
+        backgroundColor: primaryColor,
         elevation: 5,
       ),
     );
