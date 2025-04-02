@@ -50,17 +50,41 @@ class CartScreen extends StatelessWidget {
                             padding: EdgeInsets.all(12),
                             child: Row(
                               children: [
-                                // Product image
+                                // Product image with improved handling
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(
-                                    imageUrl,
+                                  child: Container(
                                     width: 70,
                                     height: 70,
-                                    fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            Icon(Icons.broken_image, size: 50),
+                                    color: Colors.grey[100],
+                                    child:
+                                        imageUrl.isNotEmpty
+                                            ? Image.network(
+                                              imageUrl,
+                                              width: 70,
+                                              height: 70,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (
+                                                context,
+                                                error,
+                                                stackTrace,
+                                              ) {
+                                                return Center(
+                                                  child: Icon(
+                                                    Icons.image_not_supported,
+                                                    size: 30,
+                                                    color: Colors.grey[400],
+                                                  ),
+                                                );
+                                              },
+                                            )
+                                            : Center(
+                                              child: Icon(
+                                                Icons.image_not_supported,
+                                                size: 30,
+                                                color: Colors.grey[400],
+                                              ),
+                                            ),
                                   ),
                                 ),
                                 SizedBox(width: 10),

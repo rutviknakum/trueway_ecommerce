@@ -20,6 +20,8 @@ class _CategoriesScreenState extends State<CategoriesScreen>
   int selectedCategoryId = -1;
   String selectedCategoryName = "";
   bool isLoading = true;
+  bool isLoadingProducts =
+      false; // Added this new loading state for products only
   bool _isMounted = true; // Track if the widget is mounted
   late AnimationController _animationController;
   bool _viewingAllProducts = false;
@@ -109,7 +111,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     if (!mounted) return; // Early return if widget is not mounted
 
     setState(() {
-      isLoading = true;
+      isLoadingProducts = true; // Only set the products loading state
       products = []; // Clear previous products
       _viewingAllProducts = viewAll;
       _currentPage = 1;
@@ -132,7 +134,8 @@ class _CategoriesScreenState extends State<CategoriesScreen>
           products = fetchedProducts;
           selectedCategoryId = categoryId;
           selectedCategoryName = categoryName;
-          isLoading = false;
+          isLoadingProducts = false; // Update product loading flag
+          isLoading = false; // Ensure main loading is also false
 
           // If we're viewing all products, check if we might have more
           if (viewAll) {
@@ -144,7 +147,8 @@ class _CategoriesScreenState extends State<CategoriesScreen>
       // Check if widget is still mounted before updating state
       if (mounted) {
         setState(() {
-          isLoading = false;
+          isLoadingProducts = false;
+          isLoading = false; // Ensure main loading is also false
         });
       }
       print("Error fetching products for category: $e");
@@ -467,7 +471,15 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                 // Products List
                 Expanded(
                   child:
-                      products.isEmpty && !isLoading
+                      isLoadingProducts
+                          ? Center(
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.orange,
+                              ),
+                            ),
+                          )
+                          : products.isEmpty
                           ? Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -523,7 +535,15 @@ class _CategoriesScreenState extends State<CategoriesScreen>
         children: [
           Expanded(
             child:
-                products.isEmpty && !isLoading
+                isLoadingProducts
+                    ? Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.orange,
+                        ),
+                      ),
+                    )
+                    : products.isEmpty
                     ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,

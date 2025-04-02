@@ -119,7 +119,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     // Function to create a CartItem object from the current product
     CartItem createCartItemFromProduct() {
       String selectedImageUrl = "";
-      if (images.isNotEmpty) {
+      if (images.isNotEmpty && _selectedImageIndex < images.length) {
         selectedImageUrl = images[_selectedImageIndex]["src"] ?? "";
       }
 
@@ -129,10 +129,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 ? widget.product["id"]
                 : int.tryParse(widget.product["id"].toString()) ?? 0,
         name: productName,
-        imageUrl: selectedImageUrl,
+        image: selectedImageUrl, // FIXED: Use 'image' instead of 'imageUrl'
         price: currentPrice,
-        image: "", // Not used
         quantity: quantity,
+        imageUrl:
+            null, // This parameter exists in constructor but is not stored
       );
     }
 
