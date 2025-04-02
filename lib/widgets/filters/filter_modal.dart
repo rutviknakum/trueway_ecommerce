@@ -48,6 +48,8 @@ class _FilterModalState extends State<FilterModal> {
       maxPrice: widget.currentFilter.maxPrice,
       sortOption: widget.currentFilter.sortOption,
       layoutType: widget.currentFilter.layoutType,
+      onSale: widget.currentFilter.onSale,
+      featured: widget.currentFilter.featured,
     );
 
     _priceRange = RangeValues(_filter.minPrice, _filter.maxPrice);
@@ -148,6 +150,41 @@ class _FilterModalState extends State<FilterModal> {
                         },
                       ),
                     ),
+
+                  // On Sale and Featured filters
+                  FilterSection(
+                    title: "Product Status",
+                    child: Column(
+                      children: [
+                        CheckboxListTile(
+                          title: Text("On Sale"),
+                          value: _filter.onSale,
+                          onChanged: (value) {
+                            setState(() {
+                              _filter = _filter.copyWith(
+                                onSale: value ?? false,
+                              );
+                            });
+                          },
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+                        CheckboxListTile(
+                          title: Text("Featured"),
+                          value: _filter.featured,
+                          onChanged: (value) {
+                            setState(() {
+                              _filter = _filter.copyWith(
+                                featured: value ?? false,
+                              );
+                            });
+                          },
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),

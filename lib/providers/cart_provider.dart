@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/cart_item.dart';
+import '../services/cart_service.dart';
 
 class CartProvider with ChangeNotifier {
   List<CartItem> _items = [];
   double _discountAmount = 0.0;
   String? _appliedCoupon;
+  final CartService _cartService = CartService();
 
   // Key for storing cart data in shared preferences
-  final String _cartStorageKey = 'trueway_cart';
   final String _couponStorageKey = 'trueway_coupon';
 
   CartProvider() {
@@ -39,25 +40,10 @@ class CartProvider with ChangeNotifier {
   // Load cart data from shared preferences
   Future<void> _loadCartFromStorage() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      // Load cart items
-      final cartData = prefs.getString(_cartStorageKey);
-      if (cartData != null) {
-        final List<dynamic> cartList = json.decode(cartData);
-        _items =
-            cartList.map((item) {
-              return CartItem(
-                id: item['id'],
-                name: item['name'],
-                price: item['price'].toDouble(),
-                quantity: item['quantity'],
-                imageUrl: item['imageUrl'],
-                image: item['image'],
-              );
-            }).toList();
-      }
+      _items = await _cartService.getCart();
 
       // Load coupon data
+      final prefs = await SharedPreferences.getInstance();
       final couponData = prefs.getString(_couponStorageKey);
       if (couponData != null) {
         final Map<String, dynamic> couponMap = json.decode(couponData);
@@ -74,24 +60,10 @@ class CartProvider with ChangeNotifier {
   // Save cart data to shared preferences
   Future<void> _saveCartToStorage() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-
-      // Save cart items
-      final List<Map<String, dynamic>> cartData =
-          _items.map((item) {
-            return {
-              'id': item.id,
-              'name': item.name,
-              'price': item.price,
-              'quantity': item.quantity,
-              'imageUrl': item.imageUrl,
-              'image': item.image,
-            };
-          }).toList();
-
-      await prefs.setString(_cartStorageKey, json.encode(cartData));
+      await _cartService.saveCart(_items);
 
       // Save coupon data
+      final prefs = await SharedPreferences.getInstance();
       if (_appliedCoupon != null) {
         final Map<String, dynamic> couponData = {
           'code': _appliedCoupon,
@@ -108,36 +80,27 @@ class CartProvider with ChangeNotifier {
 
   void addToCart(CartItem item) {
     // Check if the item is already in the cart using its id.
-    int index = _items.indexWhere((element) => element.id == item.id);
+    int index = _items.indexWhere(
+      (element) =>
+          element.id == item.id && element.variationId == item.variationId,
+    );
+
     if (index >= 0) {
       // If the item exists, increment its quantity by the quantity provided in 'item'
-      _items[index] = CartItem(
-        id: _items[index].id,
-        name: _items[index].name,
-        price: _items[index].price,
-        quantity: _items[index].quantity + item.quantity,
-        imageUrl: _items[index].imageUrl,
-        image: _items[index].image,
-      );
+      _items[index].quantity += item.quantity;
     } else {
       // If the item doesn't exist in the cart, add it with its provided quantity.
-      _items.add(
-        CartItem(
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity,
-          imageUrl: item.imageUrl,
-          image: item.image,
-        ),
-      );
+      _items.add(item);
     }
     notifyListeners();
     _saveCartToStorage();
   }
 
-  void removeFromCart(int id) {
-    _items.removeWhere((item) => item.id == id);
+  void removeFromCart(int id, [int variationId = 0]) {
+    _items.removeWhere(
+      (item) => item.id == id && item.variationId == variationId,
+    );
+
     notifyListeners();
     _saveCartToStorage();
 
@@ -149,79 +112,140 @@ class CartProvider with ChangeNotifier {
     }
   }
 
-  void updateItemQuantity(int id, int quantity) {
-    int index = _items.indexWhere((item) => item.id == id);
+  void updateItemQuantity(int id, int quantity, [int variationId = 0]) {
+    int index = _items.indexWhere(
+      (item) => item.id == id && item.variationId == variationId,
+    );
+
     if (index >= 0 && quantity > 0) {
-      _items[index] = CartItem(
-        id: _items[index].id,
-        name: _items[index].name,
-        price: _items[index].price,
-        quantity: quantity,
-        imageUrl: _items[index].imageUrl,
-        image: _items[index].image,
-      );
+      _items[index].quantity = quantity;
       notifyListeners();
       _saveCartToStorage();
     } else if (quantity == 0) {
-      removeFromCart(id);
+      removeFromCart(id, variationId);
     }
   }
 
-  void incrementItemQuantity(int id) {
-    int index = _items.indexWhere((item) => item.id == id);
+  void incrementItemQuantity(int id, [int variationId = 0]) {
+    int index = _items.indexWhere(
+      (item) => item.id == id && item.variationId == variationId,
+    );
+
     if (index >= 0) {
-      updateItemQuantity(id, _items[index].quantity + 1);
+      updateItemQuantity(id, _items[index].quantity + 1, variationId);
     }
   }
 
-  void decrementItemQuantity(int id) {
-    int index = _items.indexWhere((item) => item.id == id);
+  void decrementItemQuantity(int id, [int variationId = 0]) {
+    int index = _items.indexWhere(
+      (item) => item.id == id && item.variationId == variationId,
+    );
+
     if (index >= 0 && _items[index].quantity > 1) {
-      updateItemQuantity(id, _items[index].quantity - 1);
+      updateItemQuantity(id, _items[index].quantity - 1, variationId);
     } else if (index >= 0 && _items[index].quantity == 1) {
-      removeFromCart(id);
+      removeFromCart(id, variationId);
     }
   }
 
-  void applyDiscount(String couponCode) {
-    _appliedCoupon = couponCode;
+  Future<void> applyDiscount(String couponCode) async {
+    final result = await _cartService.applyCoupon(couponCode);
 
-    if (couponCode == "SAVE10") {
-      _discountAmount = totalPrice * 0.10; // 10% discount
-    } else if (couponCode == "SAVE20") {
-      _discountAmount = totalPrice * 0.20; // 20% discount
-    } else if (couponCode == "FLAT50") {
-      _discountAmount = 50.0; // $50 off
+    if (result['success']) {
+      _appliedCoupon = couponCode;
+
+      if (result['discount_type'] == 'percent') {
+        // Percentage discount
+        double percentValue = double.tryParse(result['discount_amount']) ?? 0;
+        _discountAmount = totalPrice * (percentValue / 100);
+      } else {
+        // Fixed discount
+        _discountAmount = double.tryParse(result['discount_amount']) ?? 0;
+      }
     } else {
-      _discountAmount = 0.0;
-      _appliedCoupon = null;
+      // Fallback to simple coupon logic if API fails
+      if (couponCode == "SAVE10") {
+        _appliedCoupon = couponCode;
+        _discountAmount = totalPrice * 0.10; // 10% discount
+      } else if (couponCode == "SAVE20") {
+        _appliedCoupon = couponCode;
+        _discountAmount = totalPrice * 0.20; // 20% discount
+      } else if (couponCode == "FLAT50") {
+        _appliedCoupon = couponCode;
+        _discountAmount = 50.0; // $50 off
+      } else {
+        _discountAmount = 0.0;
+        _appliedCoupon = null;
+      }
     }
 
     notifyListeners();
     _saveCartToStorage();
   }
 
-  void removeCoupon() {
+  Future<void> removeCoupon() async {
+    await _cartService.removeCoupon();
     _discountAmount = 0.0;
     _appliedCoupon = null;
     notifyListeners();
     _saveCartToStorage();
   }
 
-  void clearCart() {
+  Future<void> clearCart() async {
+    await _cartService.clearCart();
     _items.clear();
     _discountAmount = 0.0;
     _appliedCoupon = null;
     notifyListeners();
-    _saveCartToStorage();
   }
 
-  CartItem? getItemById(int id) {
-    int index = _items.indexWhere((item) => item.id == id);
+  CartItem? getItemById(int id, [int variationId = 0]) {
+    int index = _items.indexWhere(
+      (item) => item.id == id && item.variationId == variationId,
+    );
     return index >= 0 ? _items[index] : null;
   }
 
-  bool isInCart(int id) {
-    return _items.any((item) => item.id == id);
+  bool isInCart(int id, [int variationId = 0]) {
+    return _items.any(
+      (item) => item.id == id && item.variationId == variationId,
+    );
+  }
+
+  Future<void> refreshCartPrices() async {
+    try {
+      final cartTotals = await _cartService.getCartTotals();
+      if (cartTotals['items'] != null) {
+        List<dynamic> updatedItems = cartTotals['items'];
+
+        // Update each item with the latest price
+        for (var updatedItem in updatedItems) {
+          int index = _items.indexWhere(
+            (item) =>
+                item.id == updatedItem['id'] &&
+                item.variationId == updatedItem['variation_id'],
+          );
+
+          if (index >= 0) {
+            _items[index].price = updatedItem['price'];
+          }
+        }
+
+        // Recalculate discount if percentage-based
+        if (_appliedCoupon != null) {
+          // For demo purposes, simple logic - in real app get from API
+          if (_appliedCoupon == "SAVE10") {
+            _discountAmount = totalPrice * 0.10;
+          } else if (_appliedCoupon == "SAVE20") {
+            _discountAmount = totalPrice * 0.20;
+          }
+        }
+
+        notifyListeners();
+        _saveCartToStorage();
+      }
+    } catch (e) {
+      debugPrint('Error refreshing cart prices: $e');
+    }
   }
 }

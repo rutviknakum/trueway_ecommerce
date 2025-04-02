@@ -1,34 +1,49 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 import '../models/cart_item.dart';
+import 'api_service.dart';
 
 class OrderService {
-  final String baseUrl = "https://map.uminber.in/wp-json/wc/v3";
-  final String consumerKey = "ck_7ddea3cc57458b1e0b0a4ec2256fa403dcab8892";
-  final String consumerSecret = "cs_8589a8dc27c260024b9db84712813a95a5747f9f";
+  final ApiService _apiService = ApiService();
 
-  // Helper method for consistent authentication headers
-  Map<String, String> _getAuthHeaders() {
-    return {
-      "Content-Type": "application/json",
-      "Authorization":
-          "Basic ${base64Encode(utf8.encode('$consumerKey:$consumerSecret'))}",
-    };
-  }
-
-  Future<List<dynamic>> fetchOrders() async {
+  /// Fetches orders for the logged in user
+  Future<List<Map<String, dynamic>>> fetchOrders({
+    int page = 1,
+    int perPage = 10,
+    String? status,
+  }) async {
     try {
-      final url = Uri.parse("$baseUrl/orders");
+      // Get current user info to check for customer ID
+      final userInfo = await _apiService.getCurrentUser();
+      if (!userInfo["logged_in"]) {
+        throw Exception("User not logged in");
+      }
 
-      final response = await http.get(url, headers: _getAuthHeaders());
+      final customerId = userInfo["customer_id"];
+      if (customerId == 0) {
+        throw Exception("No customer ID found");
+      }
+
+      Map<String, dynamic> queryParams = {
+        "customer": customerId.toString(),
+        "page": page.toString(),
+        "per_page": perPage.toString(),
+      };
+
+      if (status != null && status.isNotEmpty) {
+        queryParams["status"] = status;
+      }
+
+      final response = await _apiService.authenticatedRequest(
+        ApiConfig.ordersEndpoint,
+        method: 'GET',
+      );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        List<dynamic> orders = json.decode(response.body);
+        return orders.cast<Map<String, dynamic>>();
       } else {
-        print(
-          "Error fetching orders: ${response.statusCode} - ${response.body}",
-        );
-        return [];
+        throw Exception("Failed to load orders: ${response.statusCode}");
       }
     } catch (e) {
       print("Error fetching orders: $e");
@@ -36,56 +51,77 @@ class OrderService {
     }
   }
 
-  Future<String?> getCustomerId(String email) async {
+  /// Fetches a single order by ID
+  Future<Map<String, dynamic>?> fetchOrderById(int orderId) async {
     try {
-      final url = Uri.parse("$baseUrl/customers?email=$email");
-
-      final response = await http.get(url, headers: _getAuthHeaders());
+      final response = await _apiService.authenticatedRequest(
+        "${ApiConfig.ordersEndpoint}/$orderId",
+        method: 'GET',
+      );
 
       if (response.statusCode == 200) {
-        final List<dynamic> customers = jsonDecode(response.body);
-        if (customers.isNotEmpty) {
-          return customers[0]['id'].toString(); // Get first customer's ID
-        }
+        Map<String, dynamic> order = json.decode(response.body);
+        return order;
       } else {
-        print(
-          "Error getting customer: ${response.statusCode} - ${response.body}",
-        );
+        print("Failed to load order: ${response.statusCode}");
+        return null;
       }
-      return null; // Customer not found
     } catch (e) {
-      print("Error getting customer: $e");
+      print("Error fetching order: $e");
       return null;
     }
   }
 
-  Future<Map<String, dynamic>?> placeOrder(
-    String? customerId,
-    List<CartItem> cartItems, {
+  /// Places a new order
+  Future<Map<String, dynamic>> placeOrder({
+    required List<CartItem> cartItems,
+    Map<String, String>? billingAddress,
     Map<String, String>? shippingAddress,
     String paymentMethod = "cod",
+    String paymentMethodTitle = "Cash on Delivery",
   }) async {
     try {
-      final url = Uri.parse("$baseUrl/orders");
+      // Get current user info
+      final userInfo = await _apiService.getCurrentUser();
+      if (!userInfo["logged_in"]) {
+        return {"success": false, "error": "User not logged in"};
+      }
 
-      // Map cart items to line_items format expected by WooCommerce
+      // Map cart items to line_items format
       List<Map<String, dynamic>> lineItems =
           cartItems.map((item) {
-            return {
-              "product_id": item.id,
-              "quantity": item.quantity,
-              // Price is typically handled by WooCommerce based on product ID
-              // If you need to override it, you could add a price field
-            };
+            return {"product_id": item.id, "quantity": item.quantity};
           }).toList();
 
-      // Use provided shipping address or fall back to defaults
+      // Process billing address
+      final Map<String, dynamic> billing;
+      if (billingAddress != null && billingAddress.isNotEmpty) {
+        // Split name into first and last name
+        List<String> nameParts = (billingAddress["name"] ?? "").split(' ');
+        String firstName = nameParts.first;
+        String lastName =
+            nameParts.length > 1 ? nameParts.sublist(1).join(' ') : "";
+
+        billing = {
+          "first_name": firstName,
+          "last_name": lastName,
+          "address_1": billingAddress["address"] ?? "",
+          "city": billingAddress["city"] ?? "",
+          "state": billingAddress["state"] ?? "",
+          "postcode": billingAddress["zip"] ?? "",
+          "country": billingAddress["country"] ?? "IN",
+          "email": userInfo["email"] ?? billingAddress["email"] ?? "",
+          "phone": billingAddress["phone"] ?? "",
+        };
+      } else {
+        // Use minimal billing with email
+        billing = {"email": userInfo["email"] ?? ""};
+      }
+
+      // Process shipping address
       final Map<String, dynamic> shipping;
       if (shippingAddress != null && shippingAddress.isNotEmpty) {
-        // Split name into first and last name
-        List<String> nameParts = (shippingAddress["name"] ?? "John Doe").split(
-          ' ',
-        );
+        List<String> nameParts = (shippingAddress["name"] ?? "").split(' ');
         String firstName = nameParts.first;
         String lastName =
             nameParts.length > 1 ? nameParts.sublist(1).join(' ') : "";
@@ -93,74 +129,105 @@ class OrderService {
         shipping = {
           "first_name": firstName,
           "last_name": lastName,
-          "address_1": shippingAddress["address"] ?? "123 Street",
-          "city": shippingAddress["city"] ?? "City",
+          "address_1": shippingAddress["address"] ?? "",
+          "city": shippingAddress["city"] ?? "",
           "state": shippingAddress["state"] ?? "",
-          "postcode": shippingAddress["zip"] ?? "12345",
-          "country": "IN",
-          "phone": shippingAddress["phone"] ?? "1234567890",
+          "postcode": shippingAddress["zip"] ?? "",
+          "country": shippingAddress["country"] ?? "IN",
+          "phone": shippingAddress["phone"] ?? "",
         };
+      } else if (billingAddress != null && billingAddress.isNotEmpty) {
+        // Use billing address for shipping if no shipping address provided
+        shipping = billing;
       } else {
-        shipping = {
-          "first_name": "John",
-          "last_name": "Doe",
-          "address_1": "123 Street",
-          "city": "City",
-          "state": "",
-          "postcode": "12345",
-          "country": "IN",
-          "phone": "1234567890",
-        };
+        // Minimal shipping info
+        shipping = {};
       }
 
-      // Create order data object
+      // Create order data
       Map<String, dynamic> orderData = {
-        if (customerId != null && customerId.isNotEmpty)
-          "customer_id": int.tryParse(customerId) ?? 0,
+        "customer_id": userInfo["customer_id"],
         "payment_method": paymentMethod,
-        "payment_method_title": _getPaymentMethodTitle(paymentMethod),
+        "payment_method_title": paymentMethodTitle,
         "set_paid": false,
-        "billing": {
-          ...shipping,
-          "email": "customer@example.com", // Add customer email if available
-        },
+        "billing": billing,
         "shipping": shipping,
         "line_items": lineItems,
       };
 
-      print("Placing order with data: ${jsonEncode(orderData)}");
-
-      final response = await http.post(
-        url,
-        headers: _getAuthHeaders(),
-        body: jsonEncode(orderData),
+      final response = await _apiService.authenticatedRequest(
+        ApiConfig.ordersEndpoint,
+        method: 'POST',
+        body: orderData,
       );
 
       if (response.statusCode == 201) {
-        final responseData = jsonDecode(response.body);
-        print("Order placed successfully! Order ID: ${responseData['id']}");
-        return responseData;
+        final responseData = json.decode(response.body);
+        return {
+          "success": true,
+          "order_id": responseData["id"],
+          "order_number": responseData["number"],
+          "data": responseData,
+        };
       } else {
         print("Order API Error: ${response.statusCode} - ${response.body}");
-        return null;
+        return {
+          "success": false,
+          "error": "Failed to place order",
+          "status_code": response.statusCode,
+        };
       }
-    } catch (error) {
-      print("Error placing order: $error");
-      return null;
+    } catch (e) {
+      print("Error placing order: $e");
+      return {"success": false, "error": "Error placing order: $e"};
     }
   }
 
-  // Helper to get payment method title based on method code
-  String _getPaymentMethodTitle(String method) {
-    switch (method) {
-      case 'cod':
-        return 'Cash on Delivery';
-      case 'card':
-        return 'Credit/Debit Card';
-      case 'upi':
-        return 'UPI Payment';
-      default:
-        return 'Cash on Delivery';
+  /// Cancels an order
+  Future<Map<String, dynamic>> cancelOrder(int orderId) async {
+    try {
+      final response = await _apiService.authenticatedRequest(
+        "${ApiConfig.ordersEndpoint}/$orderId",
+        method: 'PUT',
+        body: {"status": "cancelled"},
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        return {"success": true, "data": responseData};
+      } else {
+        return {
+          "success": false,
+          "error": "Failed to cancel order",
+          "status_code": response.statusCode,
+        };
+      }
+    } catch (e) {
+      print("Error cancelling order: $e");
+      return {"success": false, "error": "Error cancelling order: $e"};
+    }
+  }
+
+  /// Gets available payment gateways
+  Future<List<Map<String, dynamic>>> getPaymentGateways() async {
+    try {
+      final response = await _apiService.publicRequest(
+        "/wc/v3/payment_gateways",
+        method: 'GET',
+      );
+
+      if (response.statusCode == 200) {
+        List<dynamic> gateways = json.decode(response.body);
+        return gateways
+            .where((gateway) => gateway["enabled"] == true)
+            .cast<Map<String, dynamic>>()
+            .toList();
+      } else {
+        return [];
+      }
+    } catch (e) {
+      print("Error getting payment gateways: $e");
+      return [];
     }
   }
 }

@@ -36,16 +36,9 @@ class CartScreen extends StatelessWidget {
                       itemBuilder: (context, index) {
                         final item = cart.items[index];
 
-                        // Fallback logic for the image: use imageUrl if available,
-                        // otherwise use image, or a placeholder.
-                        String imageUrl = "";
-                        if (item.imageUrl.isNotEmpty) {
-                          imageUrl = item.imageUrl;
-                        } else if (item.image.isNotEmpty) {
-                          imageUrl = item.image;
-                        } else {
-                          imageUrl = "https://via.placeholder.com/150";
-                        }
+                        // Get image URL from the item
+                        String imageUrl =
+                            item.image ?? "https://via.placeholder.com/150";
 
                         return Card(
                           shape: RoundedRectangleBorder(
@@ -95,6 +88,36 @@ class CartScreen extends StatelessWidget {
                                         ),
                                       ),
                                       SizedBox(height: 6),
+                                      // Display variation attributes if available
+                                      if (item.attributes != null &&
+                                          item.attributes!.isNotEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 6,
+                                          ),
+                                          child: Wrap(
+                                            spacing: 5,
+                                            children:
+                                                item.attributes!.entries.map((
+                                                  entry,
+                                                ) {
+                                                  return Chip(
+                                                    label: Text(
+                                                      "${entry.key}: ${entry.value}",
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                    padding: EdgeInsets.all(0),
+                                                    materialTapTargetSize:
+                                                        MaterialTapTargetSize
+                                                            .shrinkWrap,
+                                                    backgroundColor:
+                                                        Colors.grey[200],
+                                                  );
+                                                }).toList(),
+                                          ),
+                                        ),
                                       Row(
                                         children: [
                                           _buildQuantityButton(
@@ -102,9 +125,9 @@ class CartScreen extends StatelessWidget {
                                             onPressed: () {
                                               if (item.quantity > 1) {
                                                 // Normal quantity reduction
-                                                cart.updateItemQuantity(
+                                                cart.decrementItemQuantity(
                                                   item.id,
-                                                  item.quantity - 1,
+                                                  item.variationId,
                                                 );
                                               } else {
                                                 // Show confirmation dialog when quantity is 1
@@ -113,6 +136,7 @@ class CartScreen extends StatelessWidget {
                                                   cart,
                                                   item.id,
                                                   item.name,
+                                                  item.variationId,
                                                 );
                                               }
                                             },
@@ -129,9 +153,9 @@ class CartScreen extends StatelessWidget {
                                           _buildQuantityButton(
                                             icon: Icons.add,
                                             onPressed: () {
-                                              cart.updateItemQuantity(
+                                              cart.incrementItemQuantity(
                                                 item.id,
-                                                item.quantity + 1,
+                                                item.variationId,
                                               );
                                             },
                                           ),
@@ -149,6 +173,7 @@ class CartScreen extends StatelessWidget {
                                       cart,
                                       item.id,
                                       item.name,
+                                      item.variationId,
                                     );
                                   },
                                 ),
@@ -172,8 +197,9 @@ class CartScreen extends StatelessWidget {
     BuildContext context,
     CartProvider cart,
     int itemId,
-    String itemName,
-  ) {
+    String itemName, [
+    int variationId = 0,
+  ]) {
     showDialog(
       context: context,
       builder:
@@ -189,7 +215,7 @@ class CartScreen extends StatelessWidget {
               ),
               TextButton(
                 onPressed: () {
-                  cart.removeFromCart(itemId); // Remove the item
+                  cart.removeFromCart(itemId, variationId); // Remove the item
                   Navigator.of(ctx).pop(); // Close the dialog
 
                   // Show a confirmation snackbar
@@ -241,6 +267,53 @@ class CartScreen extends StatelessWidget {
               ),
             ],
           ),
+
+          // Show discount if applied
+          if (cart.discountAmount > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Discount:",
+                    style: TextStyle(fontSize: 16, color: Colors.green),
+                  ),
+                  Text(
+                    "-₹${cart.discountAmount.toStringAsFixed(2)}",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Show final price if discount is applied
+          if (cart.discountAmount > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Final Price:",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    "₹${cart.finalPrice.toStringAsFixed(2)}",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           SizedBox(height: 12),
           // Proceed to Checkout button
           SizedBox(
@@ -253,12 +326,17 @@ class CartScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => AddressScreen()),
-                );
-              },
+              onPressed:
+                  cart.items.isEmpty
+                      ? null // Disable button if cart is empty
+                      : () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AddressScreen(),
+                          ),
+                        );
+                      },
               child: Text(
                 "Proceed to Checkout",
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),

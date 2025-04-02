@@ -22,6 +22,12 @@ class _CategoriesScreenState extends State<CategoriesScreen>
   bool isLoading = true;
   bool _isMounted = true; // Track if the widget is mounted
   late AnimationController _animationController;
+  bool _viewingAllProducts = false;
+  int _currentPage = 1;
+  bool _isLoadingMore = false;
+  bool _hasMoreProducts = true;
+  final int _perPage = 20;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -30,6 +36,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
+    _scrollController.addListener(_scrollListener);
     fetchCategoriesAndProducts();
   }
 
@@ -37,13 +44,26 @@ class _CategoriesScreenState extends State<CategoriesScreen>
   void dispose() {
     _isMounted = false; // Set mounted flag to false
     _animationController.dispose();
+    _scrollController.removeListener(_scrollListener);
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _scrollListener() {
+    if (_scrollController.position.pixels ==
+        _scrollController.position.maxScrollExtent) {
+      if (_viewingAllProducts && _hasMoreProducts && !_isLoadingMore) {
+        _loadMoreProducts();
+      }
+    }
   }
 
   // Fetch categories and products on screen load
   void fetchCategoriesAndProducts() async {
     try {
-      final fetchedCategories = await ProductService.fetchCategories();
+      // Use the new product service methods
+      final productService = ProductService();
+      final fetchedCategories = await productService.fetchCategories();
       if (!_isMounted) return; // Check if still mounted
 
       if (fetchedCategories.isNotEmpty) {
@@ -83,18 +103,27 @@ class _CategoriesScreenState extends State<CategoriesScreen>
   // Update the products based on selected category
   Future<void> updateProductsForCategory(
     int categoryId,
-    String categoryName,
-  ) async {
+    String categoryName, {
+    bool viewAll = false,
+  }) async {
     if (!mounted) return; // Early return if widget is not mounted
 
     setState(() {
       isLoading = true;
       products = []; // Clear previous products
+      _viewingAllProducts = viewAll;
+      _currentPage = 1;
+      _hasMoreProducts = true;
     });
 
     try {
-      final fetchedProducts = await ProductService.fetchProductsByCategory(
-        categoryId,
+      // Use the new product service methods
+      final productService = ProductService();
+      final fetchedProducts = await productService.fetchProducts(
+        categoryId: categoryId,
+        // If viewing all, specify pagination parameters
+        page: viewAll ? _currentPage : 1,
+        perPage: viewAll ? _perPage : _perPage,
       );
 
       // Check if widget is still mounted before updating state
@@ -104,6 +133,11 @@ class _CategoriesScreenState extends State<CategoriesScreen>
           selectedCategoryId = categoryId;
           selectedCategoryName = categoryName;
           isLoading = false;
+
+          // If we're viewing all products, check if we might have more
+          if (viewAll) {
+            _hasMoreProducts = fetchedProducts.length == _perPage;
+          }
         });
       }
     } catch (e) {
@@ -114,6 +148,43 @@ class _CategoriesScreenState extends State<CategoriesScreen>
         });
       }
       print("Error fetching products for category: $e");
+    }
+  }
+
+  // Load more products when scrolling (for "View All" mode)
+  Future<void> _loadMoreProducts() async {
+    if (!_hasMoreProducts || _isLoadingMore || !mounted) return;
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      _currentPage++;
+      final productService = ProductService();
+      final moreProducts = await productService.fetchProducts(
+        categoryId: selectedCategoryId,
+        page: _currentPage,
+        perPage: _perPage,
+      );
+
+      if (mounted) {
+        setState(() {
+          if (moreProducts.isNotEmpty) {
+            products.addAll(moreProducts);
+          }
+          _isLoadingMore = false;
+          _hasMoreProducts = moreProducts.length == _perPage;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingMore = false;
+          _currentPage--; // Revert the page increment
+        });
+      }
+      print("Error loading more products: $e");
     }
   }
 
@@ -137,14 +208,15 @@ class _CategoriesScreenState extends State<CategoriesScreen>
       imageUrl = product['images'][0]['src'];
     }
 
-    // Create cart item
+    // Create cart item with the new model structure
     final cartItem = CartItem(
       id: productId,
       name: productName,
       image: imageUrl,
       price: price,
       quantity: 1,
-      imageUrl: imageUrl,
+      variationId: 0,
+      imageUrl: null, // Default to 0 for simple products
     );
 
     // Add to cart
@@ -203,13 +275,28 @@ class _CategoriesScreenState extends State<CategoriesScreen>
         elevation: 0,
         backgroundColor: Colors.white,
         title: Text(
-          "Category",
+          _viewingAllProducts ? selectedCategoryName : "Category",
           style: TextStyle(
             color: Colors.black87,
             fontWeight: FontWeight.bold,
-            fontSize: 28,
+            fontSize: _viewingAllProducts ? 22 : 28,
           ),
         ),
+        leading:
+            _viewingAllProducts
+                ? IconButton(
+                  icon: Icon(Icons.arrow_back, color: Colors.black87),
+                  onPressed: () {
+                    setState(() {
+                      _viewingAllProducts = false;
+                    });
+                    updateProductsForCategory(
+                      selectedCategoryId,
+                      selectedCategoryName,
+                    );
+                  },
+                )
+                : null,
         actions: [
           IconButton(
             icon: Icon(Icons.search, color: Colors.grey[500], size: 28),
@@ -278,158 +365,216 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
                 ),
               )
-              : Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left side: Categories list
-                  SizedBox(
-                    width: 100,
-                    child: ListView.builder(
-                      padding: EdgeInsets.symmetric(vertical: 10),
-                      itemCount: categories.length,
-                      itemBuilder: (context, index) {
-                        final category = categories[index];
-                        final isSelected = selectedCategoryId == category['id'];
+              : _viewingAllProducts
+              ? _buildAllProductsView()
+              : _buildCategoriesView(),
+    );
+  }
 
-                        return GestureDetector(
-                          onTap: () {
-                            updateProductsForCategory(
-                              category['id'],
-                              category['name'],
-                            );
-                          },
-                          child: Container(
-                            padding: EdgeInsets.symmetric(
-                              vertical: 16,
-                              horizontal: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              border: Border(
-                                left: BorderSide(
-                                  color:
-                                      isSelected
-                                          ? Colors.orange
-                                          : Colors.transparent,
-                                  width: 3,
-                                ),
-                              ),
-                            ),
-                            child: Text(
-                              category['name'] ?? 'Unknown',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color:
-                                    isSelected ? Colors.orange : Colors.black87,
-                                fontWeight:
-                                    isSelected
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.left,
-                            ),
-                          ),
-                        );
-                      },
+  Widget _buildCategoriesView() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Left side: Categories list
+        SizedBox(
+          width: 100,
+          child: ListView.builder(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            itemCount: categories.length,
+            itemBuilder: (context, index) {
+              final category = categories[index];
+              final isSelected = selectedCategoryId == category['id'];
+
+              return GestureDetector(
+                onTap: () {
+                  updateProductsForCategory(category['id'], category['name']);
+                },
+                child: Container(
+                  padding: EdgeInsets.symmetric(vertical: 16, horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border(
+                      left: BorderSide(
+                        color: isSelected ? Colors.orange : Colors.transparent,
+                        width: 3,
+                      ),
                     ),
                   ),
+                  child: Text(
+                    category['name'] ?? 'Unknown',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: isSelected ? Colors.orange : Colors.black87,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.left,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
 
-                  // Right side: Products
-                  Expanded(
-                    child: Container(
-                      color: Colors.grey[100],
-                      child: Column(
-                        children: [
-                          // Category Header with "View All" link
-                          Container(
-                            color: Colors.grey[100],
-                            padding: EdgeInsets.all(16),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        // Right side: Products
+        Expanded(
+          child: Container(
+            color: Colors.grey[100],
+            child: Column(
+              children: [
+                // Category Header with "View All" link
+                Container(
+                  color: Colors.grey[100],
+                  padding: EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          selectedCategoryName,
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          // Implement View All functionality
+                          updateProductsForCategory(
+                            selectedCategoryId,
+                            selectedCategoryName,
+                            viewAll: true,
+                          );
+                        },
+                        child: Text(
+                          "View All",
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.orange,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Products List
+                Expanded(
+                  child:
+                      products.isEmpty && !isLoading
+                          ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Expanded(
-                                  child: Text(
-                                    selectedCategoryName,
-                                    style: TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
+                                Icon(
+                                  Icons.category_outlined,
+                                  size: 64,
+                                  color: Colors.grey[400],
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  'No products found',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey[700],
                                   ),
                                 ),
-                                GestureDetector(
-                                  onTap: () {
-                                    // Navigate to view all products for this category
-                                  },
-                                  child: Text(
-                                    "View All",
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.orange,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Try selecting a different category',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
                                   ),
                                 ),
                               ],
                             ),
+                          )
+                          : ListView.builder(
+                            padding: EdgeInsets.symmetric(horizontal: 10),
+                            itemCount: products.length,
+                            itemBuilder: (context, index) {
+                              return _buildProductListItem(
+                                context,
+                                products[index],
+                              );
+                            },
                           ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
-                          // Products List
-                          Expanded(
-                            child:
-                                products.isEmpty && !isLoading
-                                    ? Center(
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Icon(
-                                            Icons.category_outlined,
-                                            size: 64,
-                                            color: Colors.grey[400],
-                                          ),
-                                          SizedBox(height: 16),
-                                          Text(
-                                            'No products found',
-                                            style: TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.grey[700],
-                                            ),
-                                          ),
-                                          SizedBox(height: 8),
-                                          Text(
-                                            'Try selecting a different category',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey[600],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                    : ListView.builder(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                      ),
-                                      itemCount: products.length,
-                                      itemBuilder: (context, index) {
-                                        return _buildProductListItem(
-                                          context,
-                                          products[index],
-                                        );
-                                      },
-                                    ),
+  Widget _buildAllProductsView() {
+    return Container(
+      color: Colors.grey[100],
+      child: Column(
+        children: [
+          Expanded(
+            child:
+                products.isEmpty && !isLoading
+                    ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.category_outlined,
+                            size: 64,
+                            color: Colors.grey[400],
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'No products found',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey[700],
+                            ),
                           ),
                         ],
                       ),
+                    )
+                    : ListView.builder(
+                      controller: _scrollController,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 10,
+                      ),
+                      itemCount:
+                          _isLoadingMore
+                              ? products.length + 1
+                              : products.length,
+                      itemBuilder: (context, index) {
+                        if (index == products.length && _isLoadingMore) {
+                          return Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.orange,
+                                ),
+                                strokeWidth: 2.0,
+                              ),
+                            ),
+                          );
+                        }
+                        return _buildProductListItem(context, products[index]);
+                      },
                     ),
-                  ),
-                ],
-              ),
+          ),
+        ],
+      ),
     );
   }
 

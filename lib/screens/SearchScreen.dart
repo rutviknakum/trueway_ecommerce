@@ -6,6 +6,7 @@ import 'package:trueway_ecommerce/widgets/ProductCard_Search.dart';
 import 'package:trueway_ecommerce/widgets/ProductGridItem_search.dart';
 import 'package:trueway_ecommerce/widgets/filters/filter_modal.dart';
 import 'package:trueway_ecommerce/models/search_filter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({Key? key}) : super(key: key);
@@ -42,8 +43,13 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _initData() async {
-    await _searchService.initializeData();
-    setState(() {});
+    try {
+      // Initialize the search service data
+      await _searchService.initializeData();
+      setState(() {});
+    } catch (e) {
+      print("Error initializing search data: $e");
+    }
   }
 
   void _performSearch(String query) async {
@@ -67,6 +73,7 @@ class _SearchScreenState extends State<SearchScreen> {
         query,
         _currentFilter,
       );
+
       setState(() {
         _searchResults = results;
         _isLoading = false;
@@ -117,7 +124,23 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Search Products")),
+      appBar: AppBar(
+        title: const Text("Search Products"),
+        actions: [
+          // Add layout switcher button
+          IconButton(
+            icon: Icon(_getLayoutIcon(_currentFilter.layoutType)),
+            onPressed: () {
+              // Toggle between list and grid view
+              setState(() {
+                _currentFilter = _currentFilter.copyWith(
+                  layoutType: _currentFilter.layoutType == 0 ? 1 : 0,
+                );
+              });
+            },
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(10),
         child: Column(
@@ -177,6 +200,24 @@ class _SearchScreenState extends State<SearchScreen> {
         ),
       ),
     );
+  }
+
+  // Helper to get appropriate layout icon
+  IconData _getLayoutIcon(int layoutType) {
+    switch (layoutType) {
+      case 0:
+        return Icons.view_list;
+      case 1:
+        return Icons.grid_view;
+      case 2:
+        return Icons.crop_landscape;
+      case 3:
+        return Icons.view_stream;
+      case 4:
+        return Icons.segment;
+      default:
+        return Icons.view_list;
+    }
   }
 
   Widget _buildResultsArea() {
@@ -287,7 +328,7 @@ class _SearchScreenState extends State<SearchScreen> {
               leading: SizedBox(
                 width: 60,
                 height: 60,
-                child: _searchService.buildProductImage(_searchResults[index]),
+                child: _buildProductImage(_searchResults[index]),
               ),
               title: Text(
                 _searchResults[index]['name'] ?? "No Name",
@@ -322,6 +363,51 @@ class _SearchScreenState extends State<SearchScreen> {
             );
           },
         );
+    }
+  }
+
+  // Building product image widget locally rather than relying on SearchService method
+  Widget _buildProductImage(dynamic product) {
+    // Check if product has images
+    if (product['images'] != null &&
+        product['images'] is List &&
+        product['images'].isNotEmpty &&
+        product['images'][0]['src'] != null) {
+      String imageUrl = product['images'][0]['src'];
+
+      // Use CachedNetworkImage for better performance
+      return CachedNetworkImage(
+        imageUrl: imageUrl,
+        fit: BoxFit.cover,
+        placeholder:
+            (context, url) => Container(
+              color: Colors.grey[200],
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+        errorWidget:
+            (context, url, error) => Container(
+              color: Colors.grey[200],
+              child: Center(
+                child: Icon(
+                  Icons.image_not_supported,
+                  size: 40,
+                  color: Colors.grey[400],
+                ),
+              ),
+            ),
+      );
+    } else {
+      // Placeholder for products without images
+      return Container(
+        color: Colors.grey[200],
+        child: Center(
+          child: Icon(
+            Icons.image_not_supported,
+            size: 40,
+            color: Colors.grey[400],
+          ),
+        ),
+      );
     }
   }
 

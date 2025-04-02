@@ -1,175 +1,192 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
+import 'api_service.dart';
 
 class ProductService {
-  static const String baseUrl = "https://map.uminber.in/wp-json/wc/v3";
-  static const String consumerKey =
-      "ck_7ddea3cc57458b1e0b0a4ec2256fa403dcab8892";
-  static const String consumerSecret =
-      "cs_8589a8dc27c260024b9db84712813a95a5747f9f";
+  final ApiService _apiService = ApiService();
 
   /// Fetches all products from WooCommerce API
-  static Future<List<Map<String, dynamic>>> fetchProducts() async {
-    final url = Uri.parse(
-      "$baseUrl/products?consumer_key=$consumerKey&consumer_secret=$consumerSecret",
-    );
-
+  Future<List<Map<String, dynamic>>> fetchProducts({
+    int page = 1,
+    int perPage = 20,
+    String? searchQuery,
+    int? categoryId,
+    String? sortBy,
+    bool? featured,
+    bool? onSale,
+  }) async {
     try {
-      final response = await http.get(url);
+      Map<String, dynamic> queryParams = {
+        "page": page.toString(),
+        "per_page": perPage.toString(),
+      };
+
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        queryParams["search"] = searchQuery;
+      }
+
+      if (categoryId != null) {
+        queryParams["category"] = categoryId.toString();
+      }
+
+      if (sortBy != null && sortBy.isNotEmpty) {
+        // Handle different sort options
+        if (sortBy == "price-asc") {
+          queryParams["orderby"] = "price";
+          queryParams["order"] = "asc";
+        } else if (sortBy == "price-desc") {
+          queryParams["orderby"] = "price";
+          queryParams["order"] = "desc";
+        } else {
+          queryParams["orderby"] = sortBy;
+        }
+      }
+
+      if (featured != null && featured) {
+        queryParams["featured"] = "true";
+      }
+
+      if (onSale != null && onSale) {
+        queryParams["on_sale"] = "true";
+      }
+
+      final response = await _apiService.publicRequest(
+        ApiConfig.productsEndpoint,
+        method: 'GET',
+        queryParams: queryParams,
+      );
+
       if (response.statusCode == 200) {
         List<dynamic> products = json.decode(response.body);
         return products.cast<Map<String, dynamic>>();
       } else {
-        throw Exception("Failed to load products");
+        throw Exception("Failed to load products: ${response.statusCode}");
       }
     } catch (e) {
+      print("Error fetching products: $e");
       throw Exception("Error fetching products: $e");
     }
   }
 
-  /// Searches for products based on the query
-  static Future<List<Map<String, dynamic>>> searchProducts(
-    String query, {
-    String? category,
-    double? minPrice,
-    double? maxPrice,
-  }) async {
-    final url = Uri.parse(
-      "$baseUrl/products?search=$query"
-      "&consumer_key=$consumerKey&consumer_secret=$consumerSecret"
-      "${category != null ? '&category=$category' : ''}"
-      "${minPrice != null ? '&min_price=${minPrice.toInt()}' : ''}"
-      "${maxPrice != null ? '&max_price=${maxPrice.toInt()}' : ''}",
-    );
-
-    final response = await http.get(url);
-
-    if (response.statusCode == 200) {
-      List<dynamic> products = json.decode(response.body);
-      return products.cast<Map<String, dynamic>>();
-    } else {
-      throw Exception("Failed to search products");
-    }
-  }
-
-  /// Fetches banner images from WooCommerce API (if using a custom endpoint)
-  static Future<List<String>> fetchBanners() async {
-    final url = Uri.parse(
-      "https://map.uminber.in/wp-json/wp/v2/media?consumer_key=$consumerKey&consumer_secret=$consumerSecret",
-    );
-
+  /// Fetches a single product by ID
+  Future<Map<String, dynamic>> fetchProductById(int productId) async {
     try {
-      final response = await http.get(url);
+      final response = await _apiService.publicRequest(
+        "${ApiConfig.productsEndpoint}/$productId",
+        method: 'GET',
+      );
+
       if (response.statusCode == 200) {
-        List<dynamic> banners = json.decode(response.body);
-        return banners
-            .where((banner) => banner["media_type"] == "image")
-            .map<String>((banner) => banner["source_url"] as String)
-            .toList();
+        Map<String, dynamic> product = json.decode(response.body);
+        return product;
       } else {
-        throw Exception("Failed to load banners");
+        throw Exception("Failed to load product: ${response.statusCode}");
       }
     } catch (e) {
-      throw Exception("Error fetching banners: $e");
+      print("Error fetching product: $e");
+      throw Exception("Error fetching product: $e");
     }
   }
 
-  /// Fetches product categories dynamically
-  static Future<List<Map<String, dynamic>>> fetchCategories() async {
-    final url = Uri.parse(
-      "$baseUrl/products/categories?consumer_key=$consumerKey&consumer_secret=$consumerSecret",
-    );
-
+  /// Fetches product categories
+  Future<List<Map<String, dynamic>>> fetchCategories({
+    int? parent,
+    int perPage = 100,
+    bool hideEmpty = true,
+  }) async {
     try {
-      final response = await http.get(url);
+      Map<String, dynamic> queryParams = {
+        "per_page": perPage.toString(),
+        "hide_empty": hideEmpty.toString(),
+      };
+
+      if (parent != null) {
+        queryParams["parent"] = parent.toString();
+      }
+
+      final response = await _apiService.publicRequest(
+        ApiConfig.categoriesEndpoint,
+        method: 'GET',
+        queryParams: queryParams,
+      );
+
       if (response.statusCode == 200) {
         List<dynamic> categories = json.decode(response.body);
-
-        categories.forEach((cat) {
-          print("Category ID: ${cat['id']} - Name: ${cat['name']}");
-        });
 
         return categories.map<Map<String, dynamic>>((category) {
           return {
             "id": category["id"],
             "name": category["name"],
+            "count": category["count"] ?? 0,
             "image":
-                category["image"] != null
-                    ? category["image"]["src"]
-                    : "https://via.placeholder.com/50",
+                category["image"] != null ? category["image"]["src"] : null,
+            "parent": category["parent"] ?? 0,
           };
         }).toList();
       } else {
-        throw Exception("Failed to load categories");
+        throw Exception("Failed to load categories: ${response.statusCode}");
       }
     } catch (e) {
+      print("Error fetching categories: $e");
       throw Exception("Error fetching categories: $e");
     }
   }
 
-  /// Fetches products by category ID
-  static Future<List<dynamic>> fetchProductsByCategory(int categoryId) async {
-    final url = Uri.parse(
-      "$baseUrl/products?category=$categoryId&consumer_key=$consumerKey&consumer_secret=$consumerSecret",
-    );
-
+  /// Fetches product reviews
+  Future<List<Map<String, dynamic>>> fetchProductReviews(int productId) async {
     try {
-      final response = await http.get(url);
+      final response = await _apiService.publicRequest(
+        "/wc/v3/products/reviews",
+        method: 'GET',
+        queryParams: {"product": productId.toString()},
+      );
 
       if (response.statusCode == 200) {
-        final decodedResponse = json.decode(response.body);
-
-        // Check if response is null or empty
-        if (decodedResponse == null || decodedResponse.isEmpty) {
-          print("No products found for category ID: $categoryId");
-          return []; // Return empty list instead of throwing exception
-        }
-
-        List<dynamic> products = decodedResponse;
-
-        // Keep the original structure but ensure images exist
-        for (var product in products) {
-          if (product["images"] == null ||
-              !(product["images"] is List) ||
-              product["images"].isEmpty) {
-            // Add a default image if none exists
-            product["images"] = [
-              {"src": "https://via.placeholder.com/150"},
-            ];
-          }
-        }
-
-        // Log the first product for debugging
-        if (products.isNotEmpty) {
-          print("Product structure sample:");
-          print("Name: ${products[0]["name"]}");
-          print("Images: ${products[0]["images"]}");
-        }
-
-        return products;
+        List<dynamic> reviews = json.decode(response.body);
+        return reviews.cast<Map<String, dynamic>>();
       } else {
-        throw Exception(
-          "Failed to load products. Status Code: ${response.statusCode}",
-        );
+        throw Exception("Failed to load reviews: ${response.statusCode}");
       }
     } catch (e) {
-      throw Exception("Error loading products: $e");
+      print("Error fetching reviews: $e");
+      throw Exception("Error fetching reviews: $e");
     }
   }
 
-  /// Fetches all products grouped by category
-  static Future<Map<String, List<dynamic>>> fetchAllProductsByCategory() async {
-    final categories = await fetchCategories(); // Fetch all categories
-    Map<String, List<dynamic>> categorizedProducts = {};
+  /// Submits a product review
+  Future<Map<String, dynamic>> submitReview({
+    required int productId,
+    required String review,
+    required String reviewer,
+    required String reviewerEmail,
+    required int rating,
+  }) async {
+    try {
+      final body = {
+        "product_id": productId,
+        "review": review,
+        "reviewer": reviewer,
+        "reviewer_email": reviewerEmail,
+        "rating": rating,
+      };
 
-    for (var category in categories) {
-      int categoryId = category['id'];
-      String categoryName = category['name'];
+      final response = await _apiService.authenticatedRequest(
+        "/wc/v3/products/reviews",
+        method: 'POST',
+        body: body,
+      );
 
-      final products = await fetchProductsByCategory(categoryId);
-
-      categorizedProducts[categoryName] = products;
+      if (response.statusCode == 201) {
+        return {"success": true, "data": json.decode(response.body)};
+      } else {
+        return {
+          "success": false,
+          "error": "Failed to submit review: ${response.statusCode}",
+        };
+      }
+    } catch (e) {
+      print("Error submitting review: $e");
+      return {"success": false, "error": "Error submitting review: $e"};
     }
-    return categorizedProducts;
   }
 }

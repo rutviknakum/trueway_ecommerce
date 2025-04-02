@@ -23,25 +23,41 @@ class _HomeScreenState extends State<HomeScreen> {
   List categories = [];
   String bannerUrl = "";
   bool isLoading = true;
+  late ProductService _productService;
 
   @override
   void initState() {
     super.initState();
+    _productService = ProductService();
     fetchHomeData();
   }
 
   void fetchHomeData() async {
     try {
-      final fetchedProducts = await ProductService.fetchProducts();
-      final fetchedCategories = await ProductService.fetchCategories();
-      final fetchedBanners = await ProductService.fetchBanners();
+      // Use instance methods instead of static methods
+      final fetchedProducts = await _productService.fetchProducts();
+      final fetchedCategories = await _productService.fetchCategories();
+
+      // For banners, we might need to adapt the method based on your new service structure
+      List<String> fetchedBanners = [];
+      try {
+        // This might need adjustment depending on how banners are fetched in your new service
+        fetchedBanners = await _getBanners();
+      } catch (e) {
+        print("Error fetching banners: $e");
+        // Use a default banner if needed
+        fetchedBanners = ["assets/images/placeholder_banner.jpg"];
+      }
 
       // Check if the widget is still mounted before updating state
       if (mounted) {
         setState(() {
           products = fetchedProducts;
+
+          // Getting popular products (in a real app, this would be based on user data)
           popularProducts = List.from(fetchedProducts)..shuffle();
           popularProducts = popularProducts.take(4).toList();
+
           categories = fetchedCategories;
           bannerUrl =
               fetchedBanners.isNotEmpty
@@ -56,6 +72,41 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() => isLoading = false);
         print("Error fetching home data: $e");
       }
+    }
+  }
+
+  // Helper method to get banners (adapt this to your new service structure)
+  Future<List<String>> _getBanners() async {
+    // This is a temporary implementation - adapt it based on your actual service
+    try {
+      // Since we don't have direct access to banners in the new service structure,
+      // we'll return a default banner for now.
+      // You'll need to implement this properly based on your API structure
+
+      // As a fallback, you could use the existing categories or products
+      // that have images and extract those images
+
+      if (products.isNotEmpty) {
+        List<String> bannerUrls = [];
+        for (var product in products.take(3)) {
+          if (product['images'] != null &&
+              product['images'] is List &&
+              product['images'].isNotEmpty &&
+              product['images'][0]['src'] != null) {
+            bannerUrls.add(product['images'][0]['src']);
+          }
+        }
+
+        if (bannerUrls.isNotEmpty) {
+          return bannerUrls;
+        }
+      }
+
+      // If we couldn't extract any images, return a default
+      return ["assets/images/placeholder_banner.jpg"];
+    } catch (e) {
+      print("Error in _getBanners: $e");
+      return ["assets/images/placeholder_banner.jpg"];
     }
   }
 
@@ -193,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           addToRecentlyViewed(product);
                           UIHelpers.navigateToProductDetails(context, product);
                         },
-                        showViewAll: false,
+                        showViewAll: true, // Changed from false to true
                       ),
 
                       SizedBox(height: 20),

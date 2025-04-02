@@ -81,6 +81,7 @@ class UIHelpers {
       image: imageUrl,
       price: price,
       imageUrl: imageUrl,
+      quantity: 1,
     );
 
     // Check if already in wishlist

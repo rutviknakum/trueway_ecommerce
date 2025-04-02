@@ -44,7 +44,8 @@ class WishlistScreen extends StatelessWidget {
                           Row(
                             children: [
                               Image.network(
-                                product.image,
+                                product.image ??
+                                    'https://via.placeholder.com/150',
                                 width: 70,
                                 height: 70,
                                 errorBuilder:

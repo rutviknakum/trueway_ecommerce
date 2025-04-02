@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:trueway_ecommerce/utils/app_routes.dart';
 import 'package:trueway_ecommerce/providers/theme_provider.dart';
-import 'package:trueway_ecommerce/services/auth_service.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({Key? key}) : super(key: key);
@@ -25,7 +24,6 @@ class AppDrawer extends StatelessWidget {
     }
 
     // Define drawer items with their respective routes and icons
-    // This is the modified drawer menu items section in your AppDrawer.dart file
     List<Map<String, dynamic>> menuItems = [
       {
         'title': 'Home',
@@ -34,7 +32,7 @@ class AppDrawer extends StatelessWidget {
         'selectedIcon': Icons.home,
       },
       {
-        'title': 'Profile', // New menu item
+        'title': 'Profile',
         'route': AppRoutes.profile,
         'icon': Icons.person_outline,
         'selectedIcon': Icons.person,
@@ -101,11 +99,11 @@ class AppDrawer extends StatelessWidget {
           Divider(),
           _buildDrawerItem(
             context: context,
-            title: 'Logout',
-            icon: Icons.logout,
-            route: AppRoutes.logout,
+            title: 'Exit App',
+            icon: Icons.exit_to_app,
+            route: AppRoutes.main,
             isSelected: false,
-            onTap: () => _handleLogout(context),
+            onTap: () => _handleExit(context),
           ),
           SizedBox(height: 16),
         ],
@@ -154,7 +152,7 @@ class AppDrawer extends StatelessWidget {
           SizedBox(height: 10),
           Text('Welcome', style: TextStyle(color: Colors.white, fontSize: 14)),
           Text(
-            'User Name', // Replace with actual user name when available
+            'Guest User', // Generic user name
             style: TextStyle(
               color: Colors.white,
               fontSize: 18,
@@ -236,15 +234,15 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
-  // Handle logout action
-  void _handleLogout(BuildContext context) async {
+  // Handle exit action
+  void _handleExit(BuildContext context) async {
     // Show confirmation dialog
-    final shouldLogout = await showDialog<bool>(
+    final shouldExit = await showDialog<bool>(
       context: context,
       builder:
           (context) => AlertDialog(
-            title: Text('Logout'),
-            content: Text('Are you sure you want to logout?'),
+            title: Text('Exit App'),
+            content: Text('Return to home screen?'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -252,22 +250,19 @@ class AppDrawer extends StatelessWidget {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: Text('Logout'),
+                child: Text('Exit'),
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
               ),
             ],
           ),
     );
 
-    // If user confirmed logout
-    if (shouldLogout == true) {
-      // Call logout method from auth service
-      await AuthService().logoutUser();
-
-      // Navigate to login screen
+    // If user confirmed exit
+    if (shouldExit == true) {
+      // Navigate to home screen and clear the stack
       Navigator.pushNamedAndRemoveUntil(
         context,
-        AppRoutes.login,
+        AppRoutes.main,
         (route) => false,
       );
     }

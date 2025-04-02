@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:trueway_ecommerce/screens/main_screen.dart';
 import 'package:trueway_ecommerce/screens/signup_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -16,25 +15,24 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscureText = true;
   bool _isLoading = false;
 
-  void _login() async {
+  void _login() {
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isLoading = true;
       });
 
-      await AuthService().loginUser(
-        emailController.text,
-        passwordController.text,
-      );
+      // Simulate a short delay to mimic login processing
+      Future.delayed(Duration(seconds: 1), () {
+        setState(() {
+          _isLoading = false;
+        });
 
-      setState(() {
-        _isLoading = false;
+        // Navigate to main screen directly without authentication
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => MainScreen()),
+        );
       });
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => MainScreen()),
-      );
     }
   }
 
@@ -71,8 +69,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: InputDecoration(
                       labelText: "Email",
                       prefixIcon: Icon(Icons.email),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                      border: InputBorder.none,
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      contentPadding: EdgeInsets.symmetric(
+                        vertical: 15,
+                        horizontal: 15,
                       ),
                     ),
                     validator: (value) {
@@ -101,8 +103,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           });
                         },
                       ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                      border: InputBorder.none,
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      contentPadding: EdgeInsets.symmetric(
+                        vertical: 15,
+                        horizontal: 15,
                       ),
                     ),
                     validator: (value) {

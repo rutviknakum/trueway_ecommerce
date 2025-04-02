@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:trueway_ecommerce/screens/login_screen.dart';
-import 'package:trueway_ecommerce/services/auth_service.dart';
 
 class SignupScreen extends StatefulWidget {
   @override
@@ -16,29 +15,29 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _obscureText = true;
   bool _isLoading = false;
 
-  void _signup() async {
+  void _signup() {
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isLoading = true;
       });
 
-      await AuthService().signupUser(
-        nameController.text,
-        emailController.text,
-        passwordController.text,
-      );
+      // Simulate processing delay
+      Future.delayed(Duration(seconds: 1), () {
+        setState(() {
+          _isLoading = false;
+        });
 
-      setState(() {
-        _isLoading = false;
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Account Created Successfully!")),
+        );
+
+        // Navigate back to login screen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => LoginScreen()),
+        );
       });
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Account Created Successfully!")));
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => LoginScreen()),
-      );
     }
   }
 
@@ -125,11 +124,15 @@ class _SignupScreenState extends State<SignupScreen> {
                       ),
                     ),
                     validator: (value) {
-                      if (value!.length < 6) {
+                      if (value == null || value.isEmpty) {
+                        return "Password is required";
+                      }
+                      if (value.length < 6) {
                         return "Password must be at least 6 characters";
                       }
                       return null;
                     },
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                   ),
                   SizedBox(height: 20),
                   _isLoading

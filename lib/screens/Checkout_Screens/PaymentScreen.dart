@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:trueway_ecommerce/providers/cart_provider.dart';
 import 'package:trueway_ecommerce/screens/Order_scrren/OrderConfirmationScreen.dart';
 import 'package:trueway_ecommerce/services/order_service.dart';
+import 'package:trueway_ecommerce/services/api_service.dart';
 
 class PaymentScreen extends StatefulWidget {
   final Map<String, String> shippingAddress;
@@ -25,6 +26,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
   // Payment options
   String _selectedPaymentMethod = 'cod';
   bool _isProcessing = false;
+  final ApiService _apiService = ApiService();
+  final OrderService _orderService = OrderService();
 
   // Credit card form
   final TextEditingController _cardNumberController = TextEditingController();
@@ -629,36 +632,41 @@ class _PaymentScreenState extends State<PaymentScreen> {
       double discount = cart.discountAmount;
       double totalAmount = subtotal - discount + widget.shippingCost;
 
-      // Call your order service
-      final orderService = OrderService();
-      final customerId = await orderService.getCustomerId("user@example.com");
+      // Get current user info
+      final userInfo = await _apiService.getCurrentUser();
+      if (!userInfo["logged_in"]) {
+        _showErrorDialog("Please log in to place an order");
+        return;
+      }
 
-      // Add shipping address and payment method information
-      final response = await orderService.placeOrder(
-        customerId,
-        cart.items,
+      // Place the order with the new OrderService
+      final response = await _orderService.placeOrder(
+        cartItems: cart.items,
+        billingAddress: widget.shippingAddress, // Using shipping as billing
         shippingAddress: widget.shippingAddress,
         paymentMethod: _selectedPaymentMethod,
+        paymentMethodTitle: _getPaymentMethodTitle(_selectedPaymentMethod),
       );
 
-      if (response != null) {
-        // Clear cart AFTER calculating the total amount
-        cart.clearCart();
+      if (response["success"]) {
+        // Clear cart AFTER order is successful
+        await cart.clearCart();
 
-        // Navigate to confirmation screen with the saved total amount
+        // Navigate to confirmation screen
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder:
                 (context) => OrderConfirmationScreen(
-                  orderId: response['id'] ?? 9310,
-                  finalPrice:
-                      totalAmount, // Use the calculated total, not cart.finalPrice
+                  orderId: response["order_id"] ?? 0,
+                  finalPrice: totalAmount,
                 ),
           ),
         );
       } else {
-        _showErrorDialog("Failed to place order. Please try again.");
+        _showErrorDialog(
+          response["error"] ?? "Failed to place order. Please try again.",
+        );
       }
     } catch (e) {
       _showErrorDialog("An error occurred: $e");
@@ -668,6 +676,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
         _isProcessing = false;
       });
     }
+  }
+
+  String _getPaymentMethodTitle(String method) {
+    for (var paymentMethod in _paymentMethods) {
+      if (paymentMethod['id'] == method) {
+        return paymentMethod['title'];
+      }
+    }
+    return "Cash on Delivery"; // Default
   }
 
   void _showErrorDialog(String message) {
