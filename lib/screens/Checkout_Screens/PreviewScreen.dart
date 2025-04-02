@@ -62,13 +62,13 @@ class _PreviewScreenState extends State<PreviewScreen> {
           Expanded(child: _buildPreview(cart)),
         ],
       ),
-      bottomSheet: _buildBottomButtons(context, cart),
+      bottomNavigationBar: _buildBottomButtons(context, cart),
     );
   }
 
   Widget _buildCheckoutProgress() {
     return Container(
-      padding: EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
@@ -80,108 +80,90 @@ class _PreviewScreenState extends State<PreviewScreen> {
           ),
         ],
       ),
-      child: Column(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildStepCircle(
-                  "1",
-                  "ADDRESS",
-                  isActive: false,
-                  isCompleted: true,
-                ),
-                _buildStepConnector(isActive: true, isCompleted: true),
-                _buildStepCircle(
-                  "2",
-                  "SHIPPING",
-                  isActive: false,
-                  isCompleted: true,
-                ),
-                _buildStepConnector(isActive: true),
-                _buildStepCircle("3", "PREVIEW", isActive: true),
-                _buildStepConnector(isActive: false),
-                _buildStepCircle("4", "PAYMENT", isActive: false),
-              ],
-            ),
-          ),
+          _buildProgressStep("ADDRESS", 1, StepStatus.completed),
+          _buildStepConnector(StepStatus.completed),
+          _buildProgressStep("SHIPPING", 2, StepStatus.completed),
+          _buildStepConnector(StepStatus.active),
+          _buildProgressStep("PREVIEW", 3, StepStatus.active),
+          _buildStepConnector(StepStatus.inactive),
+          _buildProgressStep("PAYMENT", 4, StepStatus.inactive),
         ],
       ),
     );
   }
 
-  Widget _buildStepCircle(
-    String number,
-    String title, {
-    bool isActive = false,
-    bool isCompleted = false,
-  }) {
+  Widget _buildProgressStep(String title, int step, StepStatus status) {
     Color circleColor;
     Color textColor;
-    IconData? icon;
+    Widget icon;
 
-    if (isCompleted) {
-      circleColor = Colors.green;
-      textColor = Colors.green;
-      icon = Icons.check;
-    } else if (isActive) {
-      circleColor = Colors.orange;
-      textColor = Colors.orange;
-      icon = null;
-    } else {
-      circleColor = Colors.grey[300]!;
-      textColor = Colors.grey;
-      icon = null;
+    switch (status) {
+      case StepStatus.completed:
+        circleColor = Colors.green;
+        textColor = Colors.green;
+        icon = Icon(Icons.check, color: Colors.white, size: 16);
+        break;
+      case StepStatus.active:
+        circleColor = Colors.orange;
+        textColor = Colors.orange;
+        icon = Text(
+          "$step",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        );
+        break;
+      case StepStatus.inactive:
+        circleColor = Colors.grey[300]!;
+        textColor = Colors.grey;
+        icon = Text(
+          "$step",
+          style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+        );
+        break;
     }
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 30,
-          height: 30,
+          width: 28,
+          height: 28,
           decoration: BoxDecoration(shape: BoxShape.circle, color: circleColor),
-          child: Center(
-            child:
-                icon != null
-                    ? Icon(icon, color: Colors.white, size: 18)
-                    : Text(
-                      number,
-                      style: TextStyle(
-                        color: isActive ? Colors.white : Colors.grey,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-          ),
+          child: Center(child: icon),
         ),
         SizedBox(height: 4),
         Text(
           title,
           style: TextStyle(
-            color: textColor,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
             fontSize: 12,
+            color: textColor,
+            fontWeight:
+                status == StepStatus.active
+                    ? FontWeight.bold
+                    : FontWeight.normal,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildStepConnector({
-    bool isActive = false,
-    bool isCompleted = false,
-  }) {
+  Widget _buildStepConnector(StepStatus status) {
     Color color;
-    if (isCompleted) {
-      color = Colors.green;
-    } else if (isActive) {
-      color = Colors.orange;
-    } else {
-      color = Colors.grey[300]!;
+    switch (status) {
+      case StepStatus.completed:
+        color = Colors.green;
+        break;
+      case StepStatus.active:
+        color = Colors.orange;
+        break;
+      case StepStatus.inactive:
+        color = Colors.grey[300]!;
+        break;
     }
 
-    return Container(width: 30, height: 2, color: color);
+    return Container(width: 25, height: 2, color: color);
   }
 
   Widget _buildPreview(CartProvider cart) {
@@ -190,27 +172,23 @@ class _PreviewScreenState extends State<PreviewScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildShippingAddressSection(),
-          _buildDivider(),
+          Divider(color: Colors.grey[200], thickness: 8, height: 8),
           _buildOrderDetailsSection(cart),
-          _buildDivider(),
+          Divider(color: Colors.grey[200], thickness: 8, height: 8),
           _buildCouponSection(),
-          _buildDivider(),
+          Divider(color: Colors.grey[200], thickness: 8, height: 8),
           _buildPricingSummary(cart),
-          _buildDivider(),
+          Divider(color: Colors.grey[200], thickness: 8, height: 8),
           _buildNoteSection(),
-          SizedBox(height: 100), // Space for bottom buttons
+          SizedBox(height: 20),
         ],
       ),
     );
   }
 
-  Widget _buildDivider() {
-    return Divider(color: Colors.grey[200], thickness: 6, height: 6);
-  }
-
   Widget _buildShippingAddressSection() {
     return Padding(
-      padding: EdgeInsets.all(20),
+      padding: EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -225,29 +203,28 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   color: Colors.black87,
                 ),
               ),
-              GestureDetector(
+              InkWell(
                 onTap: () {
                   Navigator.pop(context); // Go back to shipping
                   Navigator.pop(context); // Go back to address
                 },
                 child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
                     color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
                     children: [
                       Text(
                         "Change",
                         style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[700],
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black54,
                         ),
                       ),
                       SizedBox(width: 4),
-                      Icon(Icons.edit, size: 12, color: Colors.grey[700]),
+                      Icon(Icons.edit, size: 14, color: Colors.black54),
                     ],
                   ),
                 ),
@@ -258,22 +235,22 @@ class _PreviewScreenState extends State<PreviewScreen> {
           Container(
             padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[300]!),
               color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey[300]!),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.shippingAddress['name'] ?? '',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  widget.shippingAddress['name'] ?? 'A',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: 8),
-                Text(widget.shippingAddress['address'] ?? ''),
+                Text(widget.shippingAddress['address'] ?? 'A'),
                 SizedBox(height: 4),
                 Text(
-                  '${widget.shippingAddress['city'] ?? ''}, ${widget.shippingAddress['state'] ?? ''} ${widget.shippingAddress['zip'] ?? ''}',
+                  '${widget.shippingAddress['city'] ?? 'A'}, ${widget.shippingAddress['state'] ?? 'A'} ${widget.shippingAddress['zip'] ?? '123456'}',
                 ),
                 SizedBox(height: 8),
                 Row(
@@ -281,7 +258,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                     Icon(Icons.phone, size: 16, color: Colors.grey[600]),
                     SizedBox(width: 8),
                     Text(
-                      widget.shippingAddress['phone'] ?? '',
+                      widget.shippingAddress['phone'] ?? '1234567890',
                       style: TextStyle(color: Colors.grey[700]),
                     ),
                   ],
@@ -296,7 +273,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   Widget _buildOrderDetailsSection(CartProvider cart) {
     return Padding(
-      padding: EdgeInsets.all(20),
+      padding: EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -321,11 +298,26 @@ class _PreviewScreenState extends State<PreviewScreen> {
       _quantities[cartItem.id] = cartItem.quantity;
     }
 
+    // Get image URL safely
+    String imageUrl = '';
+    try {
+      // Try different possible property names for the image URL
+      if (cartItem.image != null) {
+        imageUrl = cartItem.image;
+      } else if (cartItem.imageUrl != null) {
+        imageUrl = cartItem.imageUrl;
+      } else if (cartItem.images != null && cartItem.images.isNotEmpty) {
+        imageUrl = cartItem.images[0];
+      }
+    } catch (e) {
+      print("Error getting image URL: $e");
+    }
+
     return Container(
-      margin: EdgeInsets.only(bottom: 20),
+      margin: EdgeInsets.only(bottom: 16),
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey[300]!),
       ),
       child: Row(
@@ -335,16 +327,21 @@ class _PreviewScreenState extends State<PreviewScreen> {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(color: Colors.grey[300]!),
             ),
             child:
-                cartItem.imageUrl.isNotEmpty
+                imageUrl.isNotEmpty
                     ? ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(4),
                       child: Image.network(
-                        cartItem.imageUrl,
+                        imageUrl,
                         fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Center(
+                            child: Icon(Icons.image, color: Colors.grey),
+                          );
+                        },
                       ),
                     )
                     : Center(child: Icon(Icons.image, color: Colors.grey)),
@@ -389,44 +386,35 @@ class _PreviewScreenState extends State<PreviewScreen> {
   Widget _buildQuantityControl(cartItem, CartProvider cart) {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: Colors.grey[300]!),
       ),
       child: Row(
         children: [
-          // Decrease quantity button
-          InkWell(
+          GestureDetector(
             onTap: () {
               if (_quantities[cartItem.id]! > 1) {
                 setState(() {
                   _quantities[cartItem.id] = _quantities[cartItem.id]! - 1;
                 });
-
-                // Update cart
                 cart.updateItemQuantity(cartItem.id, _quantities[cartItem.id]!);
               }
             },
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(8),
-              bottomLeft: Radius.circular(8),
-            ),
             child: Container(
               padding: EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.grey[100],
                 borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(7),
-                  bottomLeft: Radius.circular(7),
+                  topLeft: Radius.circular(4),
+                  bottomLeft: Radius.circular(4),
                 ),
               ),
               child: Icon(Icons.remove, size: 16, color: Colors.grey[700]),
             ),
           ),
-
-          // Quantity display
           Container(
             width: 40,
-            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             color: Colors.white,
             child: Center(
               child: Text(
@@ -435,28 +423,20 @@ class _PreviewScreenState extends State<PreviewScreen> {
               ),
             ),
           ),
-
-          // Increase quantity button
-          InkWell(
+          GestureDetector(
             onTap: () {
               setState(() {
                 _quantities[cartItem.id] = _quantities[cartItem.id]! + 1;
               });
-
-              // Update cart
               cart.updateItemQuantity(cartItem.id, _quantities[cartItem.id]!);
             },
-            borderRadius: BorderRadius.only(
-              topRight: Radius.circular(8),
-              bottomRight: Radius.circular(8),
-            ),
             child: Container(
               padding: EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.grey[100],
                 borderRadius: BorderRadius.only(
-                  topRight: Radius.circular(7),
-                  bottomRight: Radius.circular(7),
+                  topRight: Radius.circular(4),
+                  bottomRight: Radius.circular(4),
                 ),
               ),
               child: Icon(Icons.add, size: 16, color: Colors.grey[700]),
@@ -469,23 +449,23 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   Widget _buildCouponSection() {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             "Coupon Code",
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
               color: Colors.black87,
             ),
           ),
-          SizedBox(height: 12),
+          SizedBox(height: 16),
           Container(
-            height: 50,
+            height: 48,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(color: Colors.grey[300]!),
             ),
             child: Row(
@@ -505,16 +485,14 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   ),
                 ),
                 Container(
-                  height: 50,
+                  height: 48,
                   child: TextButton(
                     onPressed: () {
-                      // Apply coupon
                       final cart = Provider.of<CartProvider>(
                         context,
                         listen: false,
                       );
                       cart.applyDiscount(_couponController.text);
-
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text("Coupon applied"),
@@ -533,8 +511,8 @@ class _PreviewScreenState extends State<PreviewScreen> {
                       backgroundColor: Colors.orange.withOpacity(0.1),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.only(
-                          topRight: Radius.circular(8),
-                          bottomRight: Radius.circular(8),
+                          topRight: Radius.circular(4),
+                          bottomRight: Radius.circular(4),
                         ),
                       ),
                     ),
@@ -554,7 +532,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
     double total = subtotal - discount + widget.shippingCost;
 
     return Padding(
-      padding: EdgeInsets.all(20),
+      padding: EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -570,7 +548,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
           Container(
             padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.grey[300]!),
               color: Colors.grey[50],
             ),
@@ -640,23 +618,23 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   Widget _buildNoteSection() {
     return Padding(
-      padding: EdgeInsets.all(20),
+      padding: EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             "Order Notes",
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
               color: Colors.black87,
             ),
           ),
-          SizedBox(height: 12),
+          SizedBox(height: 16),
           Container(
             height: 120,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.grey[300]!),
             ),
             child: TextField(
@@ -688,9 +666,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
         ],
       ),
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      height: 80,
       child: SizedBox(
         width: double.infinity,
+        height: 50,
         child: ElevatedButton(
           onPressed: () {
             Navigator.push(
@@ -716,9 +694,8 @@ class _PreviewScreenState extends State<PreviewScreen> {
           ),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.orange,
-            padding: EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(8),
             ),
           ),
         ),
@@ -726,3 +703,5 @@ class _PreviewScreenState extends State<PreviewScreen> {
     );
   }
 }
+
+enum StepStatus { inactive, active, completed }

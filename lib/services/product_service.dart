@@ -1,6 +1,7 @@
 import 'dart:convert';
 import '../config/api_config.dart';
 import 'api_service.dart';
+import 'package:http/http.dart' as http;
 
 class ProductService {
   final ApiService _apiService = ApiService();
@@ -130,6 +131,61 @@ class ProductService {
       print("Error fetching categories: $e");
       throw Exception("Error fetching categories: $e");
     }
+  }
+
+  /// Fetches banner images from WordPress media library
+  Future<List<String>> fetchBanners() async {
+    try {
+      // Direct URL construction to ensure compatibility with your backend
+      final url = Uri.parse(
+        "${ApiConfig.baseUrl}${ApiConfig.mediaEndpoint}?consumer_key=${ApiConfig.consumerKey}&consumer_secret=${ApiConfig.consumerSecret}&per_page=10",
+      );
+
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        List<dynamic> media = json.decode(response.body);
+        print("Media response received: ${media.length} items");
+
+        // Extract all image URLs
+        List<String> bannerUrls = [];
+        for (var item in media) {
+          if (item["media_type"] == "image") {
+            String sourceUrl = item["source_url"] as String;
+            bannerUrls.add(sourceUrl);
+            print("Found banner image: $sourceUrl");
+          }
+        }
+
+        // If we have at least one banner, return the list
+        if (bannerUrls.isNotEmpty) {
+          return bannerUrls;
+        }
+
+        // If no suitable images found, return fallback images
+        print("No suitable banner images found in media library");
+        return _getFallbackBanners();
+      } else {
+        print("Failed to load media: ${response.statusCode}");
+        // Return fallback banner images
+        return _getFallbackBanners();
+      }
+    } catch (e) {
+      print("Error fetching banners: $e");
+      // Return fallback banner images
+      return _getFallbackBanners();
+    }
+  }
+
+  /// Provides fallback banner images when API fails
+  List<String> _getFallbackBanners() {
+    return [
+      "https://picsum.photos/800/400?random=1",
+      "https://picsum.photos/800/400?random=2",
+      "https://picsum.photos/800/400?random=3",
+      "https://picsum.photos/800/400?random=4",
+      "https://picsum.photos/800/400?random=5",
+    ];
   }
 
   /// Fetches product reviews

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:trueway_ecommerce/providers/navigation_provider.dart';
 import 'package:trueway_ecommerce/providers/order_provider.dart';
 import 'package:trueway_ecommerce/providers/user_provider.dart';
+import 'package:trueway_ecommerce/utils/Theme_Config.dart';
 import 'package:trueway_ecommerce/utils/app_routes.dart';
 import 'package:trueway_ecommerce/utils/route_manager.dart';
 import 'package:trueway_ecommerce/providers/cart_provider.dart';
@@ -32,34 +33,14 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'Trueway E-Commerce',
             debugShowCheckedModeBanner: false,
-            theme: ThemeData(
-              primarySwatch: Colors.blue,
-              colorScheme: ColorScheme.fromSwatch(
-                primarySwatch: Colors.blue,
-                accentColor: Colors.orange,
-              ),
-              scaffoldBackgroundColor: Colors.white,
-              appBarTheme: AppBarTheme(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black87,
-                elevation: 0,
-                iconTheme: IconThemeData(color: Colors.black87),
-              ),
-            ),
-            darkTheme: ThemeData(
-              brightness: Brightness.dark,
-              primarySwatch: Colors.blue,
-              colorScheme: ColorScheme.dark(
-                primary: Colors.blue,
-                secondary: Colors.orange,
-              ),
-              scaffoldBackgroundColor: Colors.grey[900],
-              appBarTheme: AppBarTheme(
-                backgroundColor: Colors.grey[900],
-                foregroundColor: Colors.white,
-                elevation: 0,
-              ),
-            ),
+
+            // Use ThemeConfig for light theme
+            theme: ThemeConfig.lightTheme,
+
+            // Use ThemeConfig for dark theme
+            darkTheme: ThemeConfig.darkTheme,
+
+            // Use the theme mode from your provider
             themeMode:
                 themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
 

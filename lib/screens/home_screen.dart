@@ -22,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List popularProducts = [];
   List categories = [];
   String bannerUrl = "";
+  List<String> bannerUrls = [];
   bool isLoading = true;
   late ProductService _productService;
 
@@ -29,103 +30,103 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _productService = ProductService();
+
+    // Initialize with default values - multiple fallback banners
+    bannerUrl = "https://picsum.photos/800/400?random=1";
+    bannerUrls = [
+      "https://picsum.photos/800/400?random=1",
+      "https://picsum.photos/800/400?random=2",
+      "https://picsum.photos/800/400?random=3",
+    ];
+
     fetchHomeData();
   }
 
-  void fetchHomeData() async {
-    try {
-      // Use instance methods instead of static methods
-      final fetchedProducts = await _productService.fetchProducts();
-      final fetchedCategories = await _productService.fetchCategories();
+  // Changed return type from void to Future<void>
+  Future<void> fetchHomeData() async {
+    if (!mounted) return;
 
-      // For banners, we might need to adapt the method based on your new service structure
-      List<String> fetchedBanners = [];
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      // Start loading banners early
+      final bannersPromise = _productService.fetchBanners();
+
+      // Fetch products and categories
+      final productsPromise = _productService.fetchProducts();
+      final categoriesPromise = _productService.fetchCategories();
+
+      // Wait for products and categories
+      final fetchedProducts = await productsPromise;
+      final fetchedCategories = await categoriesPromise;
+
+      if (!mounted) return;
+
+      // Update critical data first
+      setState(() {
+        products = fetchedProducts;
+
+        // Getting popular products
+        popularProducts = List.from(fetchedProducts)..shuffle();
+        popularProducts = popularProducts.take(4).toList();
+
+        categories = fetchedCategories;
+
+        // Not loading anymore, even if banners are still coming
+        isLoading = false;
+      });
+
+      // Then handle banners when they arrive
       try {
-        // This might need adjustment depending on how banners are fetched in your new service
-        fetchedBanners = await _getBanners();
+        final fetchedBanners = await bannersPromise;
+
+        // Only update if we got valid URLs
+        if (fetchedBanners.isNotEmpty && mounted) {
+          print("Setting ${fetchedBanners.length} banner URLs");
+          setState(() {
+            bannerUrls = fetchedBanners;
+            bannerUrl =
+                fetchedBanners
+                    .first; // Set the first one as the default single URL
+          });
+        }
       } catch (e) {
-        print("Error fetching banners: $e");
-        // Use a default banner if needed
-        fetchedBanners = ["assets/images/placeholder_banner.jpg"];
-      }
-
-      // Check if the widget is still mounted before updating state
-      if (mounted) {
-        setState(() {
-          products = fetchedProducts;
-
-          // Getting popular products (in a real app, this would be based on user data)
-          popularProducts = List.from(fetchedProducts)..shuffle();
-          popularProducts = popularProducts.take(4).toList();
-
-          categories = fetchedCategories;
-          bannerUrl =
-              fetchedBanners.isNotEmpty
-                  ? fetchedBanners[0]
-                  : "assets/images/placeholder_banner.jpg";
-          isLoading = false;
-        });
+        print("Banner fetch error (keeping defaults): $e");
+        // Keep using fallback URLs
       }
     } catch (e) {
-      // Check if the widget is still mounted before updating state
-      if (mounted) {
-        setState(() => isLoading = false);
-        print("Error fetching home data: $e");
-      }
-    }
-  }
+      if (!mounted) return;
 
-  // Helper method to get banners (adapt this to your new service structure)
-  Future<List<String>> _getBanners() async {
-    // This is a temporary implementation - adapt it based on your actual service
-    try {
-      // Since we don't have direct access to banners in the new service structure,
-      // we'll return a default banner for now.
-      // You'll need to implement this properly based on your API structure
+      setState(() => isLoading = false);
+      print("Error fetching home data: $e");
 
-      // As a fallback, you could use the existing categories or products
-      // that have images and extract those images
-
-      if (products.isNotEmpty) {
-        List<String> bannerUrls = [];
-        for (var product in products.take(3)) {
-          if (product['images'] != null &&
-              product['images'] is List &&
-              product['images'].isNotEmpty &&
-              product['images'][0]['src'] != null) {
-            bannerUrls.add(product['images'][0]['src']);
-          }
-        }
-
-        if (bannerUrls.isNotEmpty) {
-          return bannerUrls;
-        }
-      }
-
-      // If we couldn't extract any images, return a default
-      return ["assets/images/placeholder_banner.jpg"];
-    } catch (e) {
-      print("Error in _getBanners: $e");
-      return ["assets/images/placeholder_banner.jpg"];
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Failed to load data. Pull down to refresh."),
+          duration: Duration(seconds: 3),
+        ),
+      );
     }
   }
 
   void addToRecentlyViewed(dynamic product) {
-    // Check if the widget is still mounted before updating state
-    if (mounted) {
-      setState(() {
-        // Remove if already present to avoid duplicates
-        recentlyViewedProducts.removeWhere((p) => p["id"] == product["id"]);
+    if (!mounted) return;
 
-        // Add at the beginning
-        recentlyViewedProducts.insert(0, product);
+    setState(() {
+      // Remove if already present to avoid duplicates
+      recentlyViewedProducts.removeWhere((p) => p["id"] == product["id"]);
 
-        // Limit to 10 items
-        if (recentlyViewedProducts.length > 10) {
-          recentlyViewedProducts.removeLast();
-        }
-      });
-    }
+      // Add at the beginning
+      recentlyViewedProducts.insert(0, product);
+
+      // Limit to 10 items
+      if (recentlyViewedProducts.length > 10) {
+        recentlyViewedProducts.removeLast();
+      }
+    });
   }
 
   @override
@@ -186,24 +187,24 @@ class _HomeScreenState extends State<HomeScreen> {
           SizedBox(width: 8),
         ],
       ),
-      // Use the enhanced dynamic drawer
       drawer: AppDrawer(),
       body:
           isLoading
               ? Center(child: CircularProgressIndicator())
               : RefreshIndicator(
-                onRefresh: () async {
-                  // Implement pull-to-refresh
-                  setState(() => isLoading = true);
-                  fetchHomeData();
-                },
+                onRefresh:
+                    fetchHomeData, // Now correctly accepts a Future<void> function
                 child: SingleChildScrollView(
                   physics: AlwaysScrollableScrollPhysics(),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Banner section
-                      BannerWidget(bannerUrl: bannerUrl),
+                      // Banner section - passing both parameters,
+                      // but bannerUrls is the one that will control the carousel
+                      BannerWidget(
+                        bannerUrl: bannerUrl,
+                        bannerUrls: bannerUrls,
+                      ),
 
                       // Categories section
                       CategoryListWidget(categories: categories),
@@ -235,6 +236,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           showViewAll: true,
                         ),
 
+                      // Banner always appears, regardless of recently viewed products
+                      // Removed the conditional so it always appears
+                      BannerWidget(
+                        bannerUrl: bannerUrl,
+                        bannerUrls: bannerUrls,
+                      ),
+
                       // Most Popular section
                       ProductSectionWidget(
                         title: "Most Popular",
@@ -244,7 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           addToRecentlyViewed(product);
                           UIHelpers.navigateToProductDetails(context, product);
                         },
-                        showViewAll: true, // Changed from false to true
+                        showViewAll: true,
                       ),
 
                       SizedBox(height: 20),

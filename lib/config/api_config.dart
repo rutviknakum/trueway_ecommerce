@@ -15,6 +15,12 @@ class ApiConfig {
   static const String customersEndpoint = "/wc/v3/customers";
   static const String ordersEndpoint = "/wc/v3/orders";
 
+  // Media endpoint for fetching banners
+  static const String mediaEndpoint = "/wp/v2/media";
+
+  // Remove the incorrect bannersEndpoint with duplicate /wp-json path
+  // static const String bannersEndpoint = "/wp-json/trueway/v1/banners";
+
   // Helper method to build a full URL with auth parameters
   static String buildUrl(String endpoint, {Map<String, dynamic>? queryParams}) {
     String url = baseUrl + endpoint;
