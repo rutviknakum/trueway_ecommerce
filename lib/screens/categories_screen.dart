@@ -9,6 +9,11 @@ import 'package:trueway_ecommerce/screens/product_details_screen.dart';
 import 'package:trueway_ecommerce/services/product_service.dart';
 
 class CategoriesScreen extends StatefulWidget {
+  // Add category parameter to enable redirection from HomeScreen
+  final Map<String, dynamic>? category;
+
+  const CategoriesScreen({Key? key, this.category}) : super(key: key);
+
   @override
   _CategoriesScreenState createState() => _CategoriesScreenState();
 }
@@ -20,9 +25,8 @@ class _CategoriesScreenState extends State<CategoriesScreen>
   int selectedCategoryId = -1;
   String selectedCategoryName = "";
   bool isLoading = true;
-  bool isLoadingProducts =
-      false; // Added this new loading state for products only
-  bool _isMounted = true; // Track if the widget is mounted
+  bool isLoadingProducts = false;
+  bool _isMounted = true;
   late AnimationController _animationController;
   bool _viewingAllProducts = false;
   int _currentPage = 1;
@@ -39,12 +43,27 @@ class _CategoriesScreenState extends State<CategoriesScreen>
       vsync: this,
     );
     _scrollController.addListener(_scrollListener);
-    fetchCategoriesAndProducts();
+
+    // Handle pre-selected category from navigation
+    if (widget.category != null) {
+      // If category is provided, set it as selected and fetch its products
+      final categoryId = widget.category!['id'] ?? -1;
+      final categoryName = widget.category!['name'] ?? "";
+
+      // Set initial view to "View All" products for the selected category
+      _viewingAllProducts = true;
+
+      // Fetch categories first, then select the specified category
+      fetchCategoriesAndInitialProducts(categoryId, categoryName);
+    } else {
+      // Normal flow - fetch categories and select the first one
+      fetchCategoriesAndProducts();
+    }
   }
 
   @override
   void dispose() {
-    _isMounted = false; // Set mounted flag to false
+    _isMounted = false;
     _animationController.dispose();
     _scrollController.removeListener(_scrollListener);
     _scrollController.dispose();
@@ -60,17 +79,59 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     }
   }
 
-  // Fetch categories and products on screen load
-  void fetchCategoriesAndProducts() async {
+  // New method to handle pre-selected category
+  void fetchCategoriesAndInitialProducts(
+    int categoryId,
+    String categoryName,
+  ) async {
     try {
-      // Use the new product service methods
       final productService = ProductService();
       final fetchedCategories = await productService.fetchCategories();
-      if (!_isMounted) return; // Check if still mounted
+
+      if (!_isMounted) return;
 
       if (fetchedCategories.isNotEmpty) {
         if (mounted) {
-          // Check mounted property
+          setState(() {
+            categories = fetchedCategories;
+            selectedCategoryId = categoryId;
+            selectedCategoryName = categoryName;
+          });
+        }
+
+        // Fetch products for the selected category with viewAll = true
+        await updateProductsForCategory(
+          categoryId,
+          categoryName,
+          viewAll: true,
+        );
+      } else {
+        if (mounted) {
+          setState(() {
+            isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+      print("Error fetching data: $e");
+    }
+  }
+
+  // Fetch categories and products on screen load
+  void fetchCategoriesAndProducts() async {
+    try {
+      final productService = ProductService();
+      final fetchedCategories = await productService.fetchCategories();
+
+      if (!_isMounted) return;
+
+      if (fetchedCategories.isNotEmpty) {
+        if (mounted) {
           setState(() {
             categories = fetchedCategories;
             selectedCategoryId = fetchedCategories[0]['id'];
@@ -85,7 +146,6 @@ class _CategoriesScreenState extends State<CategoriesScreen>
         );
       } else {
         if (mounted) {
-          // Check mounted property
           setState(() {
             isLoading = false;
           });
@@ -93,7 +153,6 @@ class _CategoriesScreenState extends State<CategoriesScreen>
       }
     } catch (e) {
       if (mounted) {
-        // Check mounted property
         setState(() {
           isLoading = false;
         });
@@ -108,47 +167,42 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     String categoryName, {
     bool viewAll = false,
   }) async {
-    if (!mounted) return; // Early return if widget is not mounted
+    if (!mounted) return;
 
     setState(() {
-      isLoadingProducts = true; // Only set the products loading state
-      products = []; // Clear previous products
+      isLoadingProducts = true;
+      products = [];
       _viewingAllProducts = viewAll;
       _currentPage = 1;
       _hasMoreProducts = true;
     });
 
     try {
-      // Use the new product service methods
       final productService = ProductService();
       final fetchedProducts = await productService.fetchProducts(
         categoryId: categoryId,
-        // If viewing all, specify pagination parameters
         page: viewAll ? _currentPage : 1,
         perPage: viewAll ? _perPage : _perPage,
       );
 
-      // Check if widget is still mounted before updating state
       if (mounted) {
         setState(() {
           products = fetchedProducts;
           selectedCategoryId = categoryId;
           selectedCategoryName = categoryName;
-          isLoadingProducts = false; // Update product loading flag
-          isLoading = false; // Ensure main loading is also false
+          isLoadingProducts = false;
+          isLoading = false;
 
-          // If we're viewing all products, check if we might have more
           if (viewAll) {
             _hasMoreProducts = fetchedProducts.length == _perPage;
           }
         });
       }
     } catch (e) {
-      // Check if widget is still mounted before updating state
       if (mounted) {
         setState(() {
           isLoadingProducts = false;
-          isLoading = false; // Ensure main loading is also false
+          isLoading = false;
         });
       }
       print("Error fetching products for category: $e");
@@ -185,7 +239,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
       if (mounted) {
         setState(() {
           _isLoadingMore = false;
-          _currentPage--; // Revert the page increment
+          _currentPage--;
         });
       }
       print("Error loading more products: $e");
@@ -220,7 +274,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
       price: price,
       quantity: 1,
       variationId: 0,
-      imageUrl: null, // Default to 0 for simple products
+      imageUrl: null,
     );
 
     // Add to cart

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:trueway_ecommerce/providers/cart_provider.dart';
 import 'package:trueway_ecommerce/screens/SearchScreen.dart';
 import 'package:trueway_ecommerce/screens/cart_screen.dart';
+import 'package:trueway_ecommerce/screens/categories_screen.dart';
 import 'package:trueway_ecommerce/services/product_service.dart';
 import 'package:trueway_ecommerce/widgets/home/banner_widget.dart';
 import 'package:trueway_ecommerce/widgets/home/category_list_widget.dart';
@@ -207,7 +208,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
 
                       // Categories section
-                      CategoryListWidget(categories: categories),
+                      // In HomeScreen.dart - where you use CategoryListWidget
+                      CategoryListWidget(
+                        categories: categories,
+                        onCategoryTap: (category) {
+                          // Navigate to your existing CategoryScreen
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder:
+                                  (context) =>
+                                      CategoriesScreen(category: category),
+                            ),
+                          );
+                        },
+                      ),
 
                       // Newly Launched section
                       ProductSectionWidget(

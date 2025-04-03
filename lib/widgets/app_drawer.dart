@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'dart:io' show Platform, exit;
 import 'package:provider/provider.dart';
 import 'package:trueway_ecommerce/utils/app_routes.dart';
 import 'package:trueway_ecommerce/providers/theme_provider.dart';
@@ -11,9 +13,12 @@ class AppDrawer extends StatelessWidget {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
 
-    // Get the current route name
-    final currentRoute =
-        ModalRoute.of(context)?.settings.name ?? AppRoutes.main;
+    // Get the current route name - ensure we get the actual route, not just the parent
+    final currentRoute = ModalRoute.of(context)?.settings.name;
+    final effectiveRoute = currentRoute ?? AppRoutes.main;
+
+    // Log for debugging
+    print('Current route: $effectiveRoute');
 
     // Extract the selected index from route arguments (if available)
     int currentIndex = 0;
@@ -81,7 +86,7 @@ class AppDrawer extends StatelessWidget {
                 final item = menuItems[index];
                 final isSelected = _isRouteSelected(
                   item['route'],
-                  currentRoute,
+                  effectiveRoute,
                   currentIndex,
                 );
 
@@ -97,11 +102,21 @@ class AppDrawer extends StatelessWidget {
             ),
           ),
           Divider(),
+          // Sign Out Option
+          _buildDrawerItem(
+            context: context,
+            title: 'Sign Out',
+            icon: Icons.logout,
+            route: '',
+            isSelected: false,
+            onTap: () => _handleSignOut(context),
+          ),
+          // Exit App Option
           _buildDrawerItem(
             context: context,
             title: 'Exit App',
             icon: Icons.exit_to_app,
-            route: AppRoutes.main,
+            route: '',
             isSelected: false,
             onTap: () => _handleExit(context),
           ),
@@ -113,14 +128,8 @@ class AppDrawer extends StatelessWidget {
 
   // Check if the route is selected based on current route
   bool _isRouteSelected(String route, String currentRoute, int currentIndex) {
-    if (currentRoute == AppRoutes.main) {
-      // If we're on the main screen, determine selected tab based on route index
-      final targetIndex = AppRoutes.getIndexFromRoute(route);
-      return targetIndex == currentIndex;
-    }
-
-    // Direct route comparison
-    return route == currentRoute;
+    // Since we're removing all highlighting, always return false
+    return false;
   }
 
   // Build the drawer header with user info
@@ -174,13 +183,12 @@ class AppDrawer extends StatelessWidget {
     int? badge,
     VoidCallback? onTap,
   }) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
-
+    // Use default colors with no highlighting
     return ListTile(
       leading: Stack(
         clipBehavior: Clip.none,
         children: [
-          Icon(icon, color: isSelected ? primaryColor : null, size: 24),
+          Icon(icon, size: 24),
           if (badge != null)
             Positioned(
               top: -5,
@@ -205,33 +213,95 @@ class AppDrawer extends StatelessWidget {
             ),
         ],
       ),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: isSelected ? primaryColor : null,
-          fontWeight: isSelected ? FontWeight.bold : null,
-        ),
-      ),
-      selected: isSelected,
-      onTap:
-          onTap ??
-          () {
-            // Close the drawer
-            Navigator.pop(context);
-
-            // If we're navigating to a tab in the bottom navigation
-            if (AppRoutes.getIndexFromRoute(route) != -1) {
-              // Navigate to the tab via the AppRoutes utility
-              AppRoutes.navigateToTab(
-                context,
-                AppRoutes.getIndexFromRoute(route),
-              );
-            } else {
-              // Navigate to other screens directly
-              Navigator.pushNamed(context, route);
-            }
-          },
+      title: Text(title),
+      selected: false, // Never show as selected
+      onTap: onTap ?? () => _navigateToRoute(context, route),
     );
+  }
+
+  void _navigateToRoute(BuildContext context, String route) {
+    // Store the current route before closing the drawer
+    final currentRoute = ModalRoute.of(context)?.settings.name;
+
+    // Debug print for navigation
+    print('Navigating from $currentRoute to $route');
+
+    // If we're already on the requested route, just close the drawer
+    if (route == currentRoute) {
+      Navigator.pop(context);
+      return;
+    }
+
+    // Close the drawer first
+    Navigator.pop(context);
+
+    // If the route is empty, return (used for sign out and exit which have their own handlers)
+    if (route.isEmpty) return;
+
+    // Handle Wishlist specifically to ensure it navigates correctly
+    if (route == AppRoutes.wishlist) {
+      // Direct navigation to the Wishlist screen
+      Navigator.pushNamed(context, AppRoutes.wishlist);
+      return;
+    }
+
+    // Special handling for Settings - handle as both tab and separate screen
+    if (route == AppRoutes.settings) {
+      // Navigate to Settings screen directly
+      Navigator.pushNamed(context, AppRoutes.settings);
+      return;
+    }
+
+    // For bottom navigation tabs
+    final targetIndex = AppRoutes.getIndexFromRoute(route);
+    if (targetIndex != -1) {
+      // Navigate to the main screen with the specific tab index
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.main,
+        (r) => false,
+        arguments: {'initialIndex': targetIndex},
+      );
+    } else {
+      // For other screens, use simple navigation to maintain the back stack
+      Navigator.pushNamed(context, route);
+    }
+  }
+
+  // Handle sign out action
+  void _handleSignOut(BuildContext context) async {
+    final shouldSignOut = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text('Sign Out'),
+            content: Text('Are you sure you want to sign out?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text('Sign Out'),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+              ),
+            ],
+          ),
+    );
+
+    if (shouldSignOut == true) {
+      // TODO: Implement your sign-out logic here
+      // For example:
+      // AuthService.signOut();
+
+      // Navigate to login screen and clear the navigation stack
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.login, // Assuming AppRoutes.login is your login route
+        (route) => false,
+      );
+    }
   }
 
   // Handle exit action
@@ -242,7 +312,7 @@ class AppDrawer extends StatelessWidget {
       builder:
           (context) => AlertDialog(
             title: Text('Exit App'),
-            content: Text('Return to home screen?'),
+            content: Text('Are you sure you want to exit the app?'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -259,12 +329,23 @@ class AppDrawer extends StatelessWidget {
 
     // If user confirmed exit
     if (shouldExit == true) {
-      // Navigate to home screen and clear the stack
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        AppRoutes.main,
-        (route) => false,
-      );
+      // Close the app - handle different platforms
+      if (Platform.isAndroid) {
+        SystemNavigator.pop();
+      } else if (Platform.isIOS) {
+        exit(0);
+      } else {
+        // For web or desktop or fallback
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoutes.login, // Redirect to login screen before attempting to exit
+          (route) => false,
+        );
+        // Try to close after a short delay
+        Future.delayed(Duration(milliseconds: 300), () {
+          SystemNavigator.pop();
+        });
+      }
     }
   }
 }
