@@ -4,168 +4,285 @@ import 'dart:io' show Platform, exit;
 import 'package:provider/provider.dart';
 import 'package:trueway_ecommerce/utils/app_routes.dart';
 import 'package:trueway_ecommerce/providers/theme_provider.dart';
+import 'package:trueway_ecommerce/services/api_service.dart';
 
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends StatefulWidget {
   const AppDrawer({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDarkMode = themeProvider.isDarkMode;
+  _AppDrawerState createState() => _AppDrawerState();
+}
 
-    // Get the current route name - ensure we get the actual route, not just the parent
+class _AppDrawerState extends State<AppDrawer> {
+  final ApiService _apiService = ApiService();
+  String _userName = 'Guest User';
+  String _userEmail = '';
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserInfo();
+  }
+
+  Future<void> _loadUserInfo() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Check if user is logged in
+      final isLoggedIn = await _apiService.isLoggedIn();
+
+      if (isLoggedIn) {
+        // Get user data from ApiService
+        final userData = await _apiService.getCurrentUser();
+
+        setState(() {
+          _userName = userData['name'] ?? 'User';
+          _userEmail = userData['email'] ?? '';
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _userName = 'Guest User';
+          _userEmail = '';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading user info: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Provider.of<ThemeProvider>(context);
+    final colorScheme = Theme.of(context).colorScheme;
+
+    // Get current route
     final currentRoute = ModalRoute.of(context)?.settings.name;
     final effectiveRoute = currentRoute ?? AppRoutes.main;
 
-    // Log for debugging
-    print('Current route: $effectiveRoute');
-
-    // Extract the selected index from route arguments (if available)
-    int currentIndex = 0;
-    if (currentRoute == AppRoutes.main) {
-      final args =
-          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      currentIndex = args?['initialIndex'] as int? ?? 0;
-    }
-
-    // Define drawer items with their respective routes and icons
+    // Define drawer items
     List<Map<String, dynamic>> menuItems = [
-      {
-        'title': 'Home',
-        'route': AppRoutes.home,
-        'icon': Icons.home_outlined,
-        'selectedIcon': Icons.home,
-      },
+      {'title': 'Home', 'route': AppRoutes.home, 'icon': Icons.home_outlined},
       {
         'title': 'Profile',
         'route': AppRoutes.profile,
         'icon': Icons.person_outline,
-        'selectedIcon': Icons.person,
       },
       {
         'title': 'My Orders',
         'route': AppRoutes.orders,
         'icon': Icons.shopping_bag_outlined,
-        'selectedIcon': Icons.shopping_bag,
       },
       {
         'title': 'Wishlist',
         'route': AppRoutes.wishlist,
         'icon': Icons.favorite_border_outlined,
-        'selectedIcon': Icons.favorite,
       },
       {
         'title': 'Settings',
         'route': AppRoutes.settings,
         'icon': Icons.settings_outlined,
-        'selectedIcon': Icons.settings,
       },
+    ];
+
+    // Account-related items
+    List<Map<String, dynamic>> accountItems = [
       {
         'title': 'About Us',
         'route': AppRoutes.about,
         'icon': Icons.info_outline,
-        'selectedIcon': Icons.info,
       },
       {
         'title': 'Support',
         'route': AppRoutes.support,
         'icon': Icons.support_outlined,
-        'selectedIcon': Icons.support,
       },
     ];
 
     return Drawer(
-      child: Column(
-        children: [
-          _buildDrawerHeader(context, isDarkMode),
-          Expanded(
-            child: ListView.builder(
-              padding: EdgeInsets.zero,
+      child: SafeArea(
+        child: Column(
+          children: [
+            // User profile header
+            _buildUserHeader(context),
+
+            // Main menu section
+            Padding(
+              padding: const EdgeInsets.only(left: 16, top: 16, bottom: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'MENU',
+                  style: TextStyle(
+                    color: colorScheme.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+            ),
+            Divider(height: 1, indent: 16, endIndent: 16),
+            // Main menu items
+            ListView.builder(
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+              padding: EdgeInsets.symmetric(vertical: 8),
               itemCount: menuItems.length,
               itemBuilder: (context, index) {
                 final item = menuItems[index];
-                final isSelected = _isRouteSelected(
-                  item['route'],
-                  effectiveRoute,
-                  currentIndex,
-                );
+                final isSelected = item['route'] == effectiveRoute;
 
                 return _buildDrawerItem(
                   context: context,
                   title: item['title'],
-                  icon: isSelected ? item['selectedIcon'] : item['icon'],
+                  icon: item['icon'],
                   route: item['route'],
                   isSelected: isSelected,
-                  badge: item['badge'],
                 );
               },
             ),
-          ),
-          Divider(),
-          // Sign Out Option
-          _buildDrawerItem(
-            context: context,
-            title: 'Sign Out',
-            icon: Icons.logout,
-            route: '',
-            isSelected: false,
-            onTap: () => _handleSignOut(context),
-          ),
-          // Exit App Option
-          _buildDrawerItem(
-            context: context,
-            title: 'Exit App',
-            icon: Icons.exit_to_app,
-            route: '',
-            isSelected: false,
-            onTap: () => _handleExit(context),
-          ),
-          SizedBox(height: 16),
-        ],
+
+            // Account section
+            Padding(
+              padding: const EdgeInsets.only(left: 16, top: 16, bottom: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'ACCOUNT',
+                  style: TextStyle(
+                    color: colorScheme.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+            ),
+            Divider(height: 1, indent: 16, endIndent: 16),
+            // Account items
+            ListView.builder(
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+              padding: EdgeInsets.symmetric(vertical: 8),
+              itemCount: accountItems.length,
+              itemBuilder: (context, index) {
+                final item = accountItems[index];
+                final isSelected = item['route'] == effectiveRoute;
+
+                return _buildDrawerItem(
+                  context: context,
+                  title: item['title'],
+                  icon: item['icon'],
+                  route: item['route'],
+                  isSelected: isSelected,
+                );
+              },
+            ),
+
+            // Bottom section with logout and exit
+            Expanded(child: Container()),
+            Divider(height: 1),
+            // Sign Out Option
+            _buildDrawerItem(
+              context: context,
+              title: 'Sign Out',
+              icon: Icons.logout,
+              route: '',
+              isSelected: false,
+              onTap: () => _handleSignOut(context),
+              showTrailing: false,
+            ),
+            // Exit App Option
+            _buildDrawerItem(
+              context: context,
+              title: 'Exit App',
+              icon: Icons.exit_to_app,
+              route: '',
+              isSelected: false,
+              onTap: () => _handleExit(context),
+              showTrailing: false,
+            ),
+            SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
 
-  // Check if the route is selected based on current route
-  bool _isRouteSelected(String route, String currentRoute, int currentIndex) {
-    // Since we're removing all highlighting, always return false
-    return false;
-  }
+  // Build user header with profile pic, name and email
+  Widget _buildUserHeader(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
 
-  // Build the drawer header with user info
-  Widget _buildDrawerHeader(BuildContext context, bool isDarkMode) {
-    return DrawerHeader(
+    return Container(
+      padding: EdgeInsets.all(16),
+      margin: EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary,
-        image: DecorationImage(
-          image: AssetImage('assets/images/drawer_header_bg.jpg'),
-          fit: BoxFit.cover,
-          colorFilter: ColorFilter.mode(
-            Colors.black.withOpacity(0.3),
-            BlendMode.darken,
-          ),
-        ),
+        color: colorScheme.primaryContainer.withOpacity(0.2),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
+          // Profile image
           CircleAvatar(
-            radius: 30,
-            backgroundColor: Colors.white,
-            child: Icon(
-              Icons.person,
-              size: 40,
-              color: Theme.of(context).colorScheme.primary,
-            ),
+            radius: 32,
+            backgroundColor: colorScheme.primary.withOpacity(0.2),
+            child:
+                _isLoading
+                    ? CircularProgressIndicator(strokeWidth: 2)
+                    : Text(
+                      _userName.isNotEmpty ? _userName[0].toUpperCase() : 'G',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.primary,
+                      ),
+                    ),
           ),
-          SizedBox(height: 10),
-          Text('Welcome', style: TextStyle(color: Colors.white, fontSize: 14)),
-          Text(
-            'Guest User', // Generic user name
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+          SizedBox(width: 16),
+          // User info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _userName,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                SizedBox(height: 4),
+                Text(
+                  _userEmail.isNotEmpty ? _userEmail : 'Welcome',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (_userEmail.isEmpty)
+                  TextButton(
+                    onPressed:
+                        () => Navigator.pushNamed(context, AppRoutes.login),
+                    child: Text(
+                      'Sign in',
+                      style: TextStyle(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size(0, 30),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      alignment: Alignment.centerLeft,
+                    ),
+                  ),
+              ],
             ),
           ),
         ],
@@ -180,74 +297,59 @@ class AppDrawer extends StatelessWidget {
     required IconData icon,
     required String route,
     required bool isSelected,
-    int? badge,
     VoidCallback? onTap,
+    bool showTrailing = true,
   }) {
-    // Use default colors with no highlighting
+    final colorScheme = Theme.of(context).colorScheme;
+
     return ListTile(
-      leading: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Icon(icon, size: 24),
-          if (badge != null)
-            Positioned(
-              top: -5,
-              right: -5,
-              child: Container(
-                padding: EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                ),
-                constraints: BoxConstraints(minWidth: 16, minHeight: 16),
-                child: Text(
-                  '$badge',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-        ],
+      leading: Icon(
+        icon,
+        color: isSelected ? colorScheme.primary : null,
+        size: 22,
       ),
-      title: Text(title),
-      selected: false, // Never show as selected
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          color: isSelected ? colorScheme.primary : null,
+        ),
+      ),
+      trailing:
+          showTrailing
+              ? Icon(Icons.chevron_right, size: 16, color: Colors.grey[400])
+              : null,
+      selected: isSelected,
+      selectedTileColor: colorScheme.primary.withOpacity(0.1),
       onTap: onTap ?? () => _navigateToRoute(context, route),
+      dense: true,
+      visualDensity: VisualDensity.compact,
     );
   }
 
   void _navigateToRoute(BuildContext context, String route) {
-    // Store the current route before closing the drawer
-    final currentRoute = ModalRoute.of(context)?.settings.name;
-
-    // Debug print for navigation
-    print('Navigating from $currentRoute to $route');
-
-    // If we're already on the requested route, just close the drawer
-    if (route == currentRoute) {
-      Navigator.pop(context);
-      return;
-    }
-
     // Close the drawer first
     Navigator.pop(context);
 
     // If the route is empty, return (used for sign out and exit which have their own handlers)
     if (route.isEmpty) return;
 
+    // Store the current route
+    final currentRoute = ModalRoute.of(context)?.settings.name;
+
+    // If we're already on the requested route, just close the drawer
+    if (route == currentRoute) {
+      return;
+    }
+
     // Handle Wishlist specifically to ensure it navigates correctly
     if (route == AppRoutes.wishlist) {
-      // Direct navigation to the Wishlist screen
       Navigator.pushNamed(context, AppRoutes.wishlist);
       return;
     }
 
-    // Special handling for Settings - handle as both tab and separate screen
+    // Special handling for Settings
     if (route == AppRoutes.settings) {
-      // Navigate to Settings screen directly
       Navigator.pushNamed(context, AppRoutes.settings);
       return;
     }
@@ -291,14 +393,19 @@ class AppDrawer extends StatelessWidget {
     );
 
     if (shouldSignOut == true) {
-      // TODO: Implement your sign-out logic here
-      // For example:
-      // AuthService.signOut();
+      // Use the ApiService to logout
+      await _apiService.logout();
+
+      // Update UI to show Guest User
+      setState(() {
+        _userName = 'Guest User';
+        _userEmail = '';
+      });
 
       // Navigate to login screen and clear the navigation stack
       Navigator.pushNamedAndRemoveUntil(
         context,
-        AppRoutes.login, // Assuming AppRoutes.login is your login route
+        AppRoutes.login,
         (route) => false,
       );
     }
@@ -306,7 +413,6 @@ class AppDrawer extends StatelessWidget {
 
   // Handle exit action
   void _handleExit(BuildContext context) async {
-    // Show confirmation dialog
     final shouldExit = await showDialog<bool>(
       context: context,
       builder:
@@ -327,7 +433,6 @@ class AppDrawer extends StatelessWidget {
           ),
     );
 
-    // If user confirmed exit
     if (shouldExit == true) {
       // Close the app - handle different platforms
       if (Platform.isAndroid) {
@@ -338,7 +443,7 @@ class AppDrawer extends StatelessWidget {
         // For web or desktop or fallback
         Navigator.pushNamedAndRemoveUntil(
           context,
-          AppRoutes.login, // Redirect to login screen before attempting to exit
+          AppRoutes.login,
           (route) => false,
         );
         // Try to close after a short delay

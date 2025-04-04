@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:trueway_ecommerce/screens/main_screen.dart';
 import 'package:trueway_ecommerce/screens/signup_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:trueway_ecommerce/services/api_service.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -10,29 +11,58 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
+  final ApiService _apiService = ApiService();
   TextEditingController emailController = TextEditingController();
   TextEditingController passwordController = TextEditingController();
   bool _obscureText = true;
   bool _isLoading = false;
+  String? _errorMessage;
 
-  void _login() {
+  void _login() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isLoading = true;
+        _errorMessage = null;
       });
 
-      // Simulate a short delay to mimic login processing
-      Future.delayed(Duration(seconds: 1), () {
+      try {
+        final response = await _apiService.login(
+          emailController.text.trim(),
+          passwordController.text,
+        );
+
         setState(() {
           _isLoading = false;
         });
 
-        // Navigate to main screen directly without authentication
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => MainScreen()),
-        );
-      });
+        if (response['success']) {
+          // Login successful
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(response['message'] ?? "Logged in successfully"),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // Navigate to main screen
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => MainScreen()),
+          );
+        } else {
+          // Login failed
+          setState(() {
+            _errorMessage =
+                response['error'] ?? "Login failed. Please try again.";
+          });
+        }
+      } catch (e) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = "An error occurred. Please check your connection.";
+        });
+        print("Login error: $e");
+      }
     }
   }
 
@@ -63,6 +93,25 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: GoogleFonts.poppins(fontSize: 16),
                   ),
                   SizedBox(height: 30),
+                  // Error message
+                  if (_errorMessage != null)
+                    Container(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _errorMessage!,
+                        style: GoogleFonts.poppins(
+                          color: Colors.red,
+                          fontSize: 14,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  SizedBox(height: _errorMessage != null ? 15 : 0),
                   TextFormField(
                     controller: emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -112,7 +161,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     validator: (value) {
-                      if (value!.length < 6) {
+                      if (value!.isEmpty) {
+                        return "Password is required";
+                      }
+                      if (value.length < 6) {
                         return "Password must be at least 6 characters";
                       }
                       return null;

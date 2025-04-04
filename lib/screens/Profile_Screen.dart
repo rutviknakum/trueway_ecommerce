@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import 'package:trueway_ecommerce/providers/auth_provider.dart';
+import 'package:trueway_ecommerce/screens/login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -35,12 +38,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
 
     try {
+      // Get user data from auth provider if available
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUser = authProvider.currentUser;
+
       // Load user data from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
 
-      // Get user data or use empty strings as defaults
-      _nameController.text = prefs.getString('user_name') ?? '';
-      _emailController.text = prefs.getString('user_email') ?? '';
+      // Get user data from auth provider or SharedPreferences, with empty strings as defaults
+      _nameController.text =
+          currentUser['name'] ?? prefs.getString('user_name') ?? '';
+      _emailController.text =
+          currentUser['email'] ?? prefs.getString('user_email') ?? '';
       _phoneController.text = prefs.getString('user_phone') ?? '';
       _addressController.text = prefs.getString('user_address') ?? '';
     } catch (e) {
@@ -83,6 +92,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _logout() async {
+    // Show confirmation dialog
+    final shouldLogout =
+        await showDialog<bool>(
+          context: context,
+          builder:
+              (context) => AlertDialog(
+                title: Text("Logout"),
+                content: Text("Are you sure you want to logout?"),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text("Cancel"),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: Text("Logout"),
+                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  ),
+                ],
+              ),
+        ) ??
+        false;
+
+    if (shouldLogout) {
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+        // Use auth provider to logout
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        await authProvider.logout();
+
+        // Navigate to login screen
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => LoginScreen()),
+          (route) => false,
+        );
+      } catch (e) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Logout failed: $e')));
+      }
     }
   }
 
@@ -202,6 +261,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             minimumSize: Size(double.infinity, 50),
                           ),
                         ),
+
+                      SizedBox(height: 16),
+
+                      // Logout button (always visible)
+                      ElevatedButton(
+                        onPressed: _logout,
+                        child: Text('Logout'),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: Size(double.infinity, 50),
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
                     ],
                   ),
                 ),

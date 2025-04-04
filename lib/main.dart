@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:trueway_ecommerce/providers/auth_provider.dart';
 import 'package:trueway_ecommerce/providers/navigation_provider.dart';
 import 'package:trueway_ecommerce/providers/order_provider.dart';
 import 'package:trueway_ecommerce/providers/user_provider.dart';
@@ -27,6 +28,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (ctx) => UserProvider()),
         ChangeNotifierProvider(create: (ctx) => NavigationProvider()),
         ChangeNotifierProvider(create: (ctx) => WishlistProvider()),
+        ChangeNotifierProvider(create: (ctx) => AuthProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (ctx, themeProvider, _) {
