@@ -47,6 +47,7 @@ dependencies:
   animate_do: ^4.2.0
   razorpay_flutter: ^1.4.0
   intl: ^0.20.2
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

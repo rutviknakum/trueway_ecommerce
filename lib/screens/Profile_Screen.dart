@@ -1,277 +1,419 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:trueway_ecommerce/providers/auth_provider.dart';
+import 'package:trueway_ecommerce/screens/EditProfileScreen.dart';
 import 'package:trueway_ecommerce/screens/login_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
-
   @override
   _ProfileScreenState createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final _formKey = GlobalKey<FormState>();
-  late TextEditingController _nameController;
-  late TextEditingController _emailController;
-  late TextEditingController _phoneController;
-  late TextEditingController _addressController;
-  bool _isEditing = false;
   bool _isLoading = true;
+  String? _errorMessage;
+  File? _profileImage;
+
+  // User profile data
+  Map<String, dynamic> _userData = {};
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController();
-    _emailController = TextEditingController();
-    _phoneController = TextEditingController();
-    _addressController = TextEditingController();
-
-    // Load user data
-    _loadUserData();
+    // Use Future.microtask to schedule this after the build is complete
+    Future.microtask(() => _fetchUserProfile());
   }
 
-  Future<void> _loadUserData() async {
+  Future<void> _fetchUserProfile() async {
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
+      _errorMessage = null;
     });
 
     try {
-      // Get user data from auth provider if available
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final currentUser = authProvider.currentUser;
 
-      // Load user data from SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
+      // Check if user is logged in
+      if (!authProvider.isLoggedIn) {
+        // Redirect to login screen if not logged in
+        // Using Future.delayed to ensure we're not in the build phase
+        Future.delayed(Duration.zero, () {
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => LoginScreen()),
+            );
+          }
+        });
+        return;
+      }
 
-      // Get user data from auth provider or SharedPreferences, with empty strings as defaults
-      _nameController.text =
-          currentUser['name'] ?? prefs.getString('user_name') ?? '';
-      _emailController.text =
-          currentUser['email'] ?? prefs.getString('user_email') ?? '';
-      _phoneController.text = prefs.getString('user_phone') ?? '';
-      _addressController.text = prefs.getString('user_address') ?? '';
-    } catch (e) {
-      print('Error loading user data: $e');
-    } finally {
+      // Fetch user profile data
+      final response = await authProvider.getUserProfile();
+
+      if (!mounted) return;
+
+      if (response['success']) {
+        _userData = authProvider.currentUser;
+
+        // Try to load profile image
+        await _loadProfileImage();
+      } else {
+        _errorMessage = response['error'] ?? "Failed to load profile";
+      }
+
       setState(() {
         _isLoading = false;
       });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        _errorMessage = "An error occurred. Please check your connection.";
+      });
+      print("Profile fetch error: $e");
     }
   }
 
-  Future<void> _saveUserData() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
+  // Load profile image from storage
+  Future<void> _loadProfileImage() async {
     try {
-      // Save user data to SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('user_name', _nameController.text);
-      await prefs.setString('user_phone', _phoneController.text);
-      await prefs.setString('user_address', _addressController.text);
+      final userId = _userData['id'] ?? _userData['user_id'];
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Profile updated successfully')));
-
-      setState(() {
-        _isEditing = false;
-      });
+      if (userId != null) {
+        final imagePath = prefs.getString('user_${userId}_profile_image');
+        if (imagePath != null) {
+          final file = File(imagePath);
+          if (await file.exists()) {
+            setState(() {
+              _profileImage = file;
+            });
+          }
+        }
+      }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to update profile: $e')));
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      print('Error loading profile image: $e');
     }
   }
 
   Future<void> _logout() async {
-    // Show confirmation dialog
-    final shouldLogout =
-        await showDialog<bool>(
-          context: context,
-          builder:
-              (context) => AlertDialog(
-                title: Text("Logout"),
-                content: Text("Are you sure you want to logout?"),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: Text("Cancel"),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: Text("Logout"),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
-                  ),
-                ],
-              ),
-        ) ??
-        false;
+    setState(() {
+      _isLoading = true;
+    });
 
-    if (shouldLogout) {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final response = await authProvider.logout();
+
+      if (!mounted) return;
+
       setState(() {
-        _isLoading = true;
+        _isLoading = false;
       });
 
-      try {
-        // Use auth provider to logout
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        await authProvider.logout();
+      if (response['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response['message'] ?? "Logged out successfully"),
+            backgroundColor: Colors.green,
+          ),
+        );
 
         // Navigate to login screen
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => LoginScreen()),
-          (route) => false,
-        );
-      } catch (e) {
-        setState(() {
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(
+        Navigator.pushReplacement(
           context,
-        ).showSnackBar(SnackBar(content: Text('Logout failed: $e')));
+          MaterialPageRoute(builder: (context) => LoginScreen()),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response['error'] ?? "Logout failed"),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("An error occurred during logout"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      print("Logout error: $e");
     }
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _phoneController.dispose();
-    _addressController.dispose();
-    super.dispose();
+  Widget _buildProfileInfo(String label, String value) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(value, style: GoogleFonts.poppins(fontSize: 16)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileImage() {
+    return Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.grey[200],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 5),
+          ),
+        ],
+        image:
+            _profileImage != null
+                ? DecorationImage(
+                  image: FileImage(_profileImage!),
+                  fit: BoxFit.cover,
+                )
+                : null,
+      ),
+      child:
+          _profileImage == null
+              ? Icon(Icons.person, size: 60, color: Colors.grey[800])
+              : null,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('My Profile'),
+        title: Text(
+          "My Profile",
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
         actions: [
           IconButton(
-            icon: Icon(_isEditing ? Icons.done : Icons.edit),
-            onPressed: () {
-              if (_isEditing) {
-                _saveUserData();
-              } else {
-                setState(() {
-                  _isEditing = true;
-                });
-              }
-            },
+            icon: Icon(Icons.logout),
+            onPressed: _isLoading ? null : _logout,
+            tooltip: "Logout",
           ),
         ],
+        elevation: 0,
       ),
       body:
           _isLoading
               ? Center(child: CircularProgressIndicator())
-              : SingleChildScrollView(
-                padding: EdgeInsets.all(16),
-                child: Form(
-                  key: _formKey,
+              : _errorMessage != null
+              ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _errorMessage!,
+                      style: GoogleFonts.poppins(
+                        color: Colors.red,
+                        fontSize: 16,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: _fetchUserProfile,
+                      child: Text("Retry"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+              : RefreshIndicator(
+                onRefresh: _fetchUserProfile,
+                child: SingleChildScrollView(
+                  physics: AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.all(20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Profile image
-                      CircleAvatar(
-                        radius: 60,
-                        backgroundColor: Colors.grey[200],
-                        child: Icon(
-                          Icons.person,
-                          size: 60,
-                          color: Colors.grey[400],
+                      // Profile Image
+                      _buildProfileImage(),
+                      SizedBox(height: 20),
+
+                      // User Name
+                      Text(
+                        _userData['name'] ?? "User",
+                        style: GoogleFonts.poppins(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
                         ),
+                        textAlign: TextAlign.center,
                       ),
-                      SizedBox(height: 24),
+                      SizedBox(height: 8),
 
-                      // Name field
-                      TextFormField(
-                        controller: _nameController,
-                        decoration: InputDecoration(
-                          labelText: 'Full Name',
-                          prefixIcon: Icon(Icons.person),
-                          border: OutlineInputBorder(),
+                      // User Email
+                      Text(
+                        _userData['email'] ?? "",
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          color: Colors.grey[600],
                         ),
-                        readOnly: !_isEditing,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter your name';
-                          }
-                          return null;
-                        },
+                        textAlign: TextAlign.center,
                       ),
-                      SizedBox(height: 16),
+                      SizedBox(height: 30),
 
-                      // Email field
-                      TextFormField(
-                        controller: _emailController,
-                        decoration: InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: Icon(Icons.email),
-                          border: OutlineInputBorder(),
+                      // Personal Information Card
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
                         ),
-                        readOnly: true, // Email can't be changed
-                      ),
-                      SizedBox(height: 16),
-
-                      // Phone field
-                      TextFormField(
-                        controller: _phoneController,
-                        decoration: InputDecoration(
-                          labelText: 'Phone Number',
-                          prefixIcon: Icon(Icons.phone),
-                          border: OutlineInputBorder(),
-                        ),
-                        readOnly: !_isEditing,
-                        keyboardType: TextInputType.phone,
-                      ),
-                      SizedBox(height: 16),
-
-                      // Address field
-                      TextFormField(
-                        controller: _addressController,
-                        decoration: InputDecoration(
-                          labelText: 'Address',
-                          prefixIcon: Icon(Icons.location_on),
-                          border: OutlineInputBorder(),
-                        ),
-                        readOnly: !_isEditing,
-                        maxLines: 3,
-                      ),
-
-                      SizedBox(height: 24),
-
-                      if (_isEditing)
-                        ElevatedButton(
-                          onPressed: _saveUserData,
-                          child: Text('Save Changes'),
-                          style: ElevatedButton.styleFrom(
-                            minimumSize: Size(double.infinity, 50),
+                        child: Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.person,
+                                    color: Colors.green,
+                                    size: 22,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    "Personal Information",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Divider(height: 30),
+                              _buildProfileInfo(
+                                "Email",
+                                _userData['email'] ?? "Not available",
+                              ),
+                              _buildProfileInfo(
+                                "Name",
+                                _userData['name'] ?? "Not available",
+                              ),
+                              _buildProfileInfo(
+                                "Mobile",
+                                _userData['phone'] ?? "Not available",
+                              ),
+                            ],
                           ),
                         ),
+                      ),
+                      SizedBox(height: 20),
 
-                      SizedBox(height: 16),
+                      // Address Card (only show if address exists)
+                      if (_userData['address'] != null &&
+                          _userData['address'].toString().isNotEmpty)
+                        Card(
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.location_on,
+                                      color: Colors.green,
+                                      size: 22,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      "Address Information",
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Divider(height: 30),
 
-                      // Logout button (always visible)
-                      ElevatedButton(
-                        onPressed: _logout,
-                        child: Text('Logout'),
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: Size(double.infinity, 50),
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
+                                // Format address for readability
+                                Text(
+                                  _userData['address'].toString(),
+                                  style: GoogleFonts.poppins(fontSize: 16),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      SizedBox(height: 30),
+
+                      // Edit Profile Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            // Navigate to edit profile screen
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder:
+                                    (context) =>
+                                        EditProfileScreen(userData: _userData),
+                              ),
+                            );
+
+                            // If profile was updated, refresh the profile data
+                            if (result == true) {
+                              _fetchUserProfile();
+                            }
+                          },
+                          icon: Icon(Icons.edit),
+                          label: Text(
+                            "Edit Profile",
+                            style: GoogleFonts.poppins(fontSize: 16),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                              vertical: 15,
+                              horizontal: 24,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            elevation: 2,
+                          ),
                         ),
                       ),
                     ],

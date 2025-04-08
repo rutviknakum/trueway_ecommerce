@@ -1,3 +1,4 @@
+// api_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -69,6 +70,87 @@ class ApiService {
       return {
         "success": false,
         "error": "Login failed. Please check your connection and try again.",
+        "debug_info": "Exception: $e",
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> signup(
+    String name,
+    String email,
+    String password,
+  ) async {
+    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+      return {"success": false, "error": "All fields are required"};
+    }
+
+    try {
+      // First check if the email already exists
+      final emailExists = await checkEmailExists(email);
+      if (emailExists) {
+        return {
+          "success": false,
+          "error":
+              "This email is already registered. Please use another email or login.",
+        };
+      }
+
+      // Create a new customer
+      final customerUrl = Uri.parse(
+        ApiConfig.buildUrl(ApiConfig.customersEndpoint),
+      );
+
+      final response = await http.post(
+        customerUrl,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "email": email,
+          "first_name": name.split(' ').first,
+          "last_name":
+              name.split(' ').length > 1
+                  ? name.split(' ').skip(1).join(' ')
+                  : "",
+          "username": email,
+          "password": password,
+        }),
+      );
+
+      if (response.statusCode == 201) {
+        final customerData = json.decode(response.body);
+
+        // Store customer ID for later use
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        if (customerData['id'] != null) {
+          await prefs.setInt("customer_id", customerData['id']);
+        }
+
+        // Automatically log the user in
+        return await login(email, password);
+      } else {
+        // Handle error response
+        try {
+          final errorData = json.decode(response.body);
+          if (errorData['message'] != null) {
+            final cleanMessage = errorData['message']
+                .replaceAll('<strong>', '')
+                .replaceAll('</strong>', '')
+                .replaceAll('<br />', ' ');
+            return {"success": false, "error": cleanMessage};
+          }
+        } catch (e) {
+          print("Error parsing signup response: $e");
+        }
+
+        return {
+          "success": false,
+          "error": "Registration failed. Please try again.",
+        };
+      }
+    } catch (e) {
+      print("Signup exception: $e");
+      return {
+        "success": false,
+        "error": "Registration failed. Please check your connection.",
         "debug_info": "Exception: $e",
       };
     }
@@ -216,360 +298,24 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> signup(
-    String name,
-    String email,
-    String password,
-  ) async {
+  // Updated logout method that returns a response
+  Future<Map<String, dynamic>> logout() async {
     try {
-      // Input validation with more detailed logging
-      print("Starting signup process for email: $email");
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.remove("user_email");
+      await prefs.remove("customer_id");
+      await prefs.remove("user_id");
+      await prefs.remove("user_name");
+      await prefs.remove("auth_token");
+      await prefs.remove("basic_auth");
 
-      name = name.trim();
-      email = email.trim();
+      print("User logged out successfully");
 
-      if (name.isEmpty) {
-        print("Signup validation failed: Name is empty");
-        return {"success": false, "error": "Name is required."};
-      }
-      if (email.isEmpty || !email.contains('@')) {
-        print("Signup validation failed: Invalid email format");
-        return {
-          "success": false,
-          "error": "Please enter a valid email address.",
-        };
-      }
-      if (password.isEmpty || password.length < 6) {
-        print("Signup validation failed: Password too short");
-        return {
-          "success": false,
-          "error": "Password must be at least 6 characters.",
-        };
-      }
-
-      // Check if user already exists
-      print("Checking if email exists: $email");
-      final exists = await checkEmailExists(email);
-      if (exists) {
-        print("Signup failed: Email already exists");
-        return {
-          "success": false,
-          "error":
-              "An account with this email already exists. Please log in instead.",
-        };
-      }
-
-      // Generate a unique username
-      String username = email.split('@')[0];
-      final timestamp = DateTime.now().millisecondsSinceEpoch % 10000;
-      username = "$username$timestamp";
-      print("Generated username: $username");
-
-      // Create new customer with complete data structure
-      final url = Uri.parse(ApiConfig.buildUrl(ApiConfig.customersEndpoint));
-
-      // Build a complete customer data structure with all required fields
-      final Map<String, dynamic> customerData = {
-        "email": email,
-        "username": username,
-        "password": password,
-        "first_name": name,
-        "last_name": "",
-        "billing": {
-          "first_name": name,
-          "last_name": "",
-          "company": "",
-          "address_1": "",
-          "address_2": "",
-          "city": "",
-          "state": "",
-          "postcode": "000000",
-          "country": "",
-          "email": email,
-          "phone": "",
-        },
-        "shipping": {
-          "first_name": name,
-          "last_name": "",
-          "company": "",
-          "address_1": "",
-          "address_2": "",
-          "city": "",
-          "state": "",
-          "postcode": "000000",
-          "country": "",
-        },
-      };
-
-      final requestBody = jsonEncode(customerData);
-      print("Sending customer creation request to WooCommerce");
-
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: requestBody,
-      );
-
-      print("Customer creation response status: ${response.statusCode}");
-      print("Response body: ${response.body}");
-
-      if (response.statusCode == 201) {
-        final customerData = json.decode(response.body);
-        print("Registration successful! Customer ID: ${customerData["id"]}");
-
-        // Try auto login
-        print("Attempting auto-login after registration");
-        final loginResponse = await login(email, password);
-        if (loginResponse['success']) {
-          print("Auto-login successful");
-          return {
-            "success": true,
-            "customer_id": customerData["id"],
-            "email": email,
-            "name": name,
-            "message": "Account created and logged in successfully",
-          };
-        } else {
-          // Store basic user info if login fails
-          print("Auto-login failed, storing basic user info");
-          SharedPreferences prefs = await SharedPreferences.getInstance();
-          await prefs.setString("user_email", email);
-          await prefs.setInt("customer_id", customerData["id"]);
-          await prefs.setString("user_name", name);
-
-          return {
-            "success": true,
-            "customer_id": customerData["id"],
-            "email": email,
-            "name": name,
-            "message": "Account created successfully",
-          };
-        }
-      } else {
-        // Registration failed
-        print("Registration failed with status: ${response.statusCode}");
-        String errorMessage = "Registration failed. Please try again.";
-        try {
-          final errorData = json.decode(response.body);
-          print("Error data: $errorData");
-          if (errorData['message'] != null) {
-            errorMessage = errorData['message'];
-            // Clean up HTML tags from error message
-            errorMessage = errorMessage
-                .replaceAll(RegExp(r'<[^>]*>'), '')
-                .replaceAll('&quot;', '"');
-            print("Cleaned error message: $errorMessage");
-          }
-        } catch (e) {
-          print("Error parsing registration error: $e");
-        }
-        return {"success": false, "error": errorMessage};
-      }
+      return {"success": true, "message": "Logged out successfully"};
     } catch (e) {
-      print("Signup exception: $e");
-      return {
-        "success": false,
-        "error": "Registration failed. Please try again later.",
-      };
+      print("Error during logout: $e");
+      return {"success": false, "error": "Failed to log out: $e"};
     }
-  }
-
-  // Add this new method for admin-based signup
-  Future<Map<String, dynamic>> signupWithAdmin(
-    String name,
-    String email,
-    String password,
-  ) async {
-    try {
-      // Admin credentials
-      final adminUsername = "uminberdesigns"; // Your admin username
-      final adminPassword = "f5KILLHNanhPF9DwJjATIDgV"; // Your app password
-
-      // Input validation
-      name = name.trim();
-      email = email.trim();
-
-      if (name.isEmpty) {
-        return {"success": false, "error": "Name is required."};
-      }
-      if (email.isEmpty || !email.contains('@')) {
-        return {
-          "success": false,
-          "error": "Please enter a valid email address.",
-        };
-      }
-      if (password.isEmpty || password.length < 6) {
-        return {
-          "success": false,
-          "error": "Password must be at least 6 characters.",
-        };
-      }
-
-      // Check if user already exists by email
-      final exists = await _checkUserExists(email);
-      if (exists) {
-        return {
-          "success": false,
-          "error": "Account already exists. Please log in instead.",
-        };
-      }
-
-      // Create Basic Auth token for admin
-      final token = base64.encode(utf8.encode('$adminUsername:$adminPassword'));
-
-      // Generate a unique username
-      final username =
-          email.split('@')[0] +
-          DateTime.now().millisecondsSinceEpoch.toString().substring(0, 4);
-
-      // Create user data - minimal fields required
-      final userData = {
-        "username": username,
-        "email": email,
-        "password": password,
-        "name": name,
-        "roles": ["customer"],
-      };
-
-      // WordPress users endpoint
-      final url = Uri.parse('${ApiConfig.baseUrl}/wp/v2/users');
-
-      print("Sending user creation request: ${jsonEncode(userData)}");
-
-      final response = await http.post(
-        url,
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Basic $token",
-        },
-        body: jsonEncode(userData),
-      );
-
-      print("User creation response status: ${response.statusCode}");
-      print("Response body: ${response.body}");
-
-      if (response.statusCode == 201) {
-        final responseData = json.decode(response.body);
-        print("User created successfully with ID: ${responseData['id']}");
-
-        // Store user info
-        SharedPreferences prefs = await SharedPreferences.getInstance();
-        await prefs.setString("user_email", email);
-        await prefs.setString("user_name", name);
-
-        if (responseData['id'] != null) {
-          await prefs.setInt("user_id", responseData['id']);
-        }
-
-        // Try to log in the new user
-        final loginResponse = await login(email, password);
-        if (loginResponse['success']) {
-          return {
-            "success": true,
-            "user_id": responseData['id'],
-            "email": email,
-            "name": name,
-            "message": "Account created and logged in successfully",
-          };
-        } else {
-          return {
-            "success": true,
-            "user_id": responseData['id'],
-            "email": email,
-            "name": name,
-            "message": "Account created successfully. Please log in.",
-          };
-        }
-      } else {
-        // Failed to create user
-        String errorMessage = "Registration failed. Please try again.";
-        try {
-          final errorData = json.decode(response.body);
-          print("Error data: $errorData");
-
-          if (errorData['message'] != null) {
-            errorMessage = errorData['message'];
-            // Clean up HTML tags from error message
-            errorMessage =
-                errorMessage
-                    .replaceAll(RegExp(r'<[^>]*>'), ' ')
-                    .replaceAll('&quot;', '"')
-                    .replaceAll(RegExp(r'\s+'), ' ')
-                    .trim();
-          }
-        } catch (e) {
-          print("Error parsing registration error: $e");
-        }
-        return {"success": false, "error": errorMessage};
-      }
-    } catch (e) {
-      print("Signup with admin exception: $e");
-      return {
-        "success": false,
-        "error": "Registration failed. Please try again later.",
-      };
-    }
-  }
-
-  // Helper method to check if a user exists by email
-  Future<bool> _checkUserExists(String email) async {
-    try {
-      // First try to check via WooCommerce customers endpoint
-      final customersUrl = Uri.parse(
-        ApiConfig.buildUrl(
-          ApiConfig.customersEndpoint,
-          queryParams: {"email": email},
-        ),
-      );
-
-      final customersResponse = await http.get(customersUrl);
-      if (customersResponse.statusCode == 200) {
-        final List customers = json.decode(customersResponse.body);
-        if (customers.isNotEmpty) {
-          return true;
-        }
-      }
-
-      // If no customer found, we can't directly check WordPress users by email without admin auth
-      // We'll check indirectly by trying to use the JWT endpoint with the email
-      final jwtUrl = Uri.parse(ApiConfig.baseUrl + ApiConfig.authEndpoint);
-      final jwtResponse = await http.post(
-        jwtUrl,
-        headers: {"Content-Type": "application/x-www-form-urlencoded"},
-        body: {"username": email, "password": "check_only_not_real_password"},
-      );
-
-      if (jwtResponse.statusCode == 200) {
-        // Should never happen with wrong password
-        return true;
-      }
-
-      try {
-        final errorData = json.decode(jwtResponse.body);
-        // If error code indicates incorrect password, the user exists
-        if (errorData['code'] == '[jwt_auth] incorrect_password') {
-          return true;
-        }
-      } catch (e) {
-        print("Error parsing JWT response: $e");
-      }
-
-      return false;
-    } catch (e) {
-      print("Error checking if user exists: $e");
-      return false;
-    }
-  }
-
-  Future<void> logout() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.remove("user_email");
-    await prefs.remove("customer_id");
-    await prefs.remove("user_id");
-    await prefs.remove("user_name");
-    await prefs.remove("auth_token");
-    await prefs.remove("basic_auth");
-    print("User logged out successfully");
   }
 
   Future<bool> isLoggedIn() async {

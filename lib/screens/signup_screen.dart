@@ -49,12 +49,9 @@ class _SignupScreenState extends State<SignupScreen> {
           "Attempting signup with: Name=$name, Email=$email, Password length=${password.length}",
         );
 
-        // Try the admin-based registration method
-        final response = await _apiService.signupWithAdmin(
-          name,
-          email,
-          password,
-        );
+        // Try the regular signup method instead
+        // We're using this method from the ApiService class directly
+        final response = await _apiService.signup(name, email, password);
 
         print("Signup response: $response");
 
