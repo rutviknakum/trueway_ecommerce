@@ -336,7 +336,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // Add the missing getUserProfile method
+  // Get user profile
   Future<Map<String, dynamic>> getUserProfile() async {
     _isLoading = true;
     notifyListeners();
@@ -418,25 +418,154 @@ class AuthProvider extends ChangeNotifier {
 
   // Update current user data
   Future<void> updateCurrentUser(Map<String, dynamic> userData) async {
-    if (userData.isEmpty) {
-      print('Cannot update with empty user data');
-      return;
-    }
-
     try {
-      // Make sure we don't lose the ID when updating
+      if (userData.isEmpty) {
+        print('Cannot update with empty user data');
+        return;
+      }
+
+      // Get the current state first
+      Map<String, dynamic> updatedUser = Map.from(_currentUser);
+
+      // Make sure we don't lose any IDs when updating
       if (_currentUser.containsKey('id') && !userData.containsKey('id')) {
         userData['id'] = _currentUser['id'];
       }
 
-      // Update current user data
-      _currentUser = {..._currentUser, ...userData};
+      if (_currentUser.containsKey('user_id') &&
+          !userData.containsKey('user_id')) {
+        userData['user_id'] = _currentUser['user_id'];
+      }
 
-      // Save the updated data
-      await _saveUserData(_currentUser);
+      if (_currentUser.containsKey('customer_id') &&
+          !userData.containsKey('customer_id')) {
+        userData['customer_id'] = _currentUser['customer_id'];
+      }
+
+      // Update with new values
+      updatedUser.addAll(userData);
+
+      // Ensure all IDs are strings
+      if (updatedUser.containsKey('id')) {
+        updatedUser['id'] = updatedUser['id'].toString();
+      }
+
+      if (updatedUser.containsKey('user_id')) {
+        updatedUser['user_id'] = updatedUser['user_id'].toString();
+      }
+
+      if (updatedUser.containsKey('customer_id')) {
+        updatedUser['customer_id'] = updatedUser['customer_id'].toString();
+      }
+
+      // Update current user data
+      _currentUser = updatedUser;
+
+      // Save to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      String userId = '';
+
+      // Get user ID from the updated data
+      if (updatedUser.containsKey('id') && updatedUser['id'] != null) {
+        userId = updatedUser['id'].toString();
+      } else if (updatedUser.containsKey('user_id') &&
+          updatedUser['user_id'] != null) {
+        userId = updatedUser['user_id'].toString();
+        // Ensure we have 'id' field for consistency
+        updatedUser['id'] = userId;
+        _currentUser['id'] = userId;
+      } else if (updatedUser.containsKey('customer_id') &&
+          updatedUser['customer_id'] != null) {
+        // Last resort - use customer_id if no user_id
+        userId = updatedUser['customer_id'].toString();
+        // Don't set as 'id' to avoid confusion
+      }
+
+      if (userId.isEmpty) {
+        print('Warning: Cannot save user data - no user ID found');
+        return;
+      }
+
+      // Save current user ID
+      await prefs.setString('current_user_id', userId);
+
+      // Save user data
+      if (updatedUser.containsKey('name') && updatedUser['name'] != null) {
+        await prefs.setString(
+          'user_${userId}_name',
+          updatedUser['name'].toString(),
+        );
+      }
+
+      if (updatedUser.containsKey('email') && updatedUser['email'] != null) {
+        await prefs.setString(
+          'user_${userId}_email',
+          updatedUser['email'].toString(),
+        );
+      }
+
+      if (updatedUser.containsKey('phone') && updatedUser['phone'] != null) {
+        await prefs.setString(
+          'user_${userId}_phone',
+          updatedUser['phone'].toString(),
+        );
+      }
+
+      if (updatedUser.containsKey('address') &&
+          updatedUser['address'] != null) {
+        await prefs.setString(
+          'user_${userId}_address',
+          updatedUser['address'].toString(),
+        );
+      }
+
+      // Save to old format keys too for backward compatibility
+      await prefs.setString('user_name', updatedUser['name'] ?? '');
+      await prefs.setString('user_email', updatedUser['email'] ?? '');
+      if (updatedUser.containsKey('phone')) {
+        await prefs.setString('user_phone', updatedUser['phone'].toString());
+      }
+      if (updatedUser.containsKey('address')) {
+        await prefs.setString(
+          'user_address',
+          updatedUser['address'].toString(),
+        );
+      }
+
+      // Save IDs if available
+      if (updatedUser.containsKey('user_id') &&
+          updatedUser['user_id'] != null) {
+        // Convert string to int if needed
+        int? userIdInt;
+        if (updatedUser['user_id'] is String) {
+          userIdInt = int.tryParse(updatedUser['user_id']);
+        } else {
+          userIdInt = updatedUser['user_id'] as int?;
+        }
+
+        if (userIdInt != null) {
+          await prefs.setInt('user_id', userIdInt);
+        }
+      }
+
+      if (updatedUser.containsKey('customer_id') &&
+          updatedUser['customer_id'] != null) {
+        // Convert string to int if needed
+        int? customerIdInt;
+        if (updatedUser['customer_id'] is String) {
+          customerIdInt = int.tryParse(updatedUser['customer_id']);
+        } else {
+          customerIdInt = updatedUser['customer_id'] as int?;
+        }
+
+        if (customerIdInt != null) {
+          await prefs.setInt('customer_id', customerIdInt);
+        }
+      }
+
       notifyListeners();
     } catch (e) {
-      print('Error updating user data: $e');
+      print('Error updating current user data: $e');
     }
   }
 

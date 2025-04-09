@@ -19,8 +19,10 @@ extension ApiProfileService on ApiService {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       final email = prefs.getString("user_email");
       final name = prefs.getString("user_name");
-      final userId = prefs.getInt("user_id");
-      final customerId = prefs.getInt("customer_id");
+
+      // Get IDs and store as strings to avoid type issues
+      final userId = prefs.getInt("user_id")?.toString();
+      final customerId = prefs.getInt("customer_id")?.toString();
 
       Map<String, dynamic> userData = {
         'email': email,
@@ -124,9 +126,9 @@ extension ApiProfileService on ApiService {
         return {'success': false, 'error': 'Not authenticated'};
       }
 
-      // Get customer ID and user ID
-      final customerId = userData['customer_id'];
-      final userId = userData['user_id'];
+      // Get customer ID and user ID (ensure they're strings)
+      final customerId = userData['customer_id']?.toString();
+      final userId = userData['user_id']?.toString();
 
       // Store updated data in SharedPreferences for local access
       SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -143,6 +145,7 @@ extension ApiProfileService on ApiService {
       // If we have a customer ID, update WooCommerce customer data
       if (customerId != null) {
         try {
+          // Use the correct WooCommerce v3 API endpoint with proper formatting
           final url = Uri.parse(
             ApiConfig.buildUrl("${ApiConfig.customersEndpoint}/$customerId"),
           );
@@ -154,13 +157,26 @@ extension ApiProfileService on ApiService {
             addressComponents = _parseAddressString(userData['address']);
           }
 
-          // Create update payload
+          // Extract first and last name from full name
+          String firstName = userData['name'] ?? '';
+          String lastName = '';
+
+          if (firstName.contains(' ')) {
+            final nameParts = firstName.split(' ');
+            firstName = nameParts.first;
+            lastName = nameParts.sublist(1).join(' ');
+          }
+
+          // Create properly structured update payload
           final Map<String, dynamic> updateData = {
-            'first_name': userData['name'], // Use name as first_name
+            'first_name': firstName,
+            'last_name': lastName,
             'billing': {
-              'first_name': userData['name'],
+              'first_name': firstName,
+              'last_name': lastName,
               'phone': userData['phone'] ?? '',
             },
+            'shipping': {'first_name': firstName, 'last_name': lastName},
           };
 
           // Add address components if available
@@ -175,22 +191,30 @@ extension ApiProfileService on ApiService {
                 addressComponents['country'] ?? '';
 
             // Also update shipping address
-            updateData['shipping'] = {
-              'first_name': userData['name'],
-              'address_1': addressComponents['street'] ?? '',
-              'city': addressComponents['city'] ?? '',
-              'state': addressComponents['state'] ?? '',
-              'postcode': addressComponents['postalCode'] ?? '',
-              'country': addressComponents['country'] ?? '',
-            };
+            updateData['shipping']['address_1'] =
+                addressComponents['street'] ?? '';
+            updateData['shipping']['city'] = addressComponents['city'] ?? '';
+            updateData['shipping']['state'] = addressComponents['state'] ?? '';
+            updateData['shipping']['postcode'] =
+                addressComponents['postalCode'] ?? '';
+            updateData['shipping']['country'] =
+                addressComponents['country'] ?? '';
           }
 
+          // Get auth headers with proper WooCommerce API authentication
+          final headers = await getAuthHeaders(includeWooAuth: true);
+          headers['Content-Type'] = 'application/json';
+
+          // Debug the request
+          print("Updating customer with URL: $url");
+          print("Headers: $headers");
+          print("Update data: ${json.encode(updateData)}");
+
           // Send update request to WooCommerce API
-          final headers = await getAuthHeaders();
           final response = await http.put(
             url,
             headers: headers,
-            body: jsonEncode(updateData),
+            body: json.encode(updateData),
           );
 
           if (response.statusCode == 200) {
@@ -199,6 +223,12 @@ extension ApiProfileService on ApiService {
           } else {
             print("Failed to update customer: ${response.statusCode}");
             print("Response body: ${response.body}");
+
+            // If we got a 403, try the WordPress user update method as fallback
+            if (response.statusCode == 403 && userId != null) {
+              print("Falling back to WordPress user update");
+              return await _updateWordPressUser(userId, userData);
+            }
 
             // If WooCommerce update fails, still return success since we've updated local data
             return {
@@ -218,47 +248,7 @@ extension ApiProfileService on ApiService {
       }
       // If no customer ID but we have a WordPress user ID
       else if (userId != null) {
-        try {
-          final headers = await getAuthHeaders();
-          final url = Uri.parse('${ApiConfig.baseUrl}/wp/v2/users/$userId');
-
-          // Create update payload
-          final Map<String, dynamic> updateData = {
-            'name': userData['name'],
-            'meta': {
-              'phone': userData['phone'] ?? '',
-              'address': userData['address'] ?? '',
-            },
-          };
-
-          // Send update request to WordPress API
-          final response = await http.put(
-            url,
-            headers: headers,
-            body: jsonEncode(updateData),
-          );
-
-          if (response.statusCode == 200) {
-            print("WordPress user profile updated successfully");
-            return {'success': true, 'message': 'Profile updated successfully'};
-          } else {
-            print("Failed to update WordPress user: ${response.statusCode}");
-
-            // If WordPress update fails, still return success since we've updated local data
-            return {
-              'success': true,
-              'message':
-                  'Profile updated locally. Some changes may not sync with server.',
-            };
-          }
-        } catch (e) {
-          print("Error updating WordPress user profile: $e");
-          // Continue even if API update fails - we've already saved locally
-          return {
-            'success': true,
-            'message': 'Profile updated locally. Server sync failed.',
-          };
-        }
+        return await _updateWordPressUser(userId, userData);
       }
 
       // If no customer ID or user ID, just return success for local update
@@ -268,6 +258,57 @@ extension ApiProfileService on ApiService {
       return {
         'success': false,
         'error': 'An error occurred while updating profile',
+      };
+    }
+  }
+
+  // Helper method to update WordPress user data
+  Future<Map<String, dynamic>> _updateWordPressUser(
+    String userId,
+    Map<String, dynamic> userData,
+  ) async {
+    try {
+      final headers = await getAuthHeaders();
+      headers['Content-Type'] = 'application/json';
+
+      final url = Uri.parse('${ApiConfig.baseUrl}/wp/v2/users/$userId');
+
+      // Create update payload
+      final Map<String, dynamic> updateData = {
+        'name': userData['name'],
+        'meta': {
+          'phone': userData['phone'] ?? '',
+          'address': userData['address'] ?? '',
+        },
+      };
+
+      // Send update request to WordPress API
+      final response = await http.put(
+        url,
+        headers: headers,
+        body: json.encode(updateData),
+      );
+
+      if (response.statusCode == 200) {
+        print("WordPress user profile updated successfully");
+        return {'success': true, 'message': 'Profile updated successfully'};
+      } else {
+        print("Failed to update WordPress user: ${response.statusCode}");
+        print("Response body: ${response.body}");
+
+        // If WordPress update fails, still return success since we've updated local data
+        return {
+          'success': true,
+          'message':
+              'Profile updated locally. Some changes may not sync with server.',
+        };
+      }
+    } catch (e) {
+      print("Error updating WordPress user profile: $e");
+      // Continue even if API update fails - we've already saved locally
+      return {
+        'success': true,
+        'message': 'Profile updated locally. Server sync failed.',
       };
     }
   }

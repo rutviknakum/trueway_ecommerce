@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:trueway_ecommerce/providers/auth_provider.dart';
-import 'package:trueway_ecommerce/services/api_profile_service.dart';
 import 'package:trueway_ecommerce/services/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -73,6 +72,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     // Load profile image if exists
     _loadProfileImage();
+
+    // Debug print to check available user IDs
+    print("Available user IDs in EditProfileScreen:");
+    print("id: ${widget.userData['id']}");
+    print("user_id: ${widget.userData['user_id']}");
+    print("customer_id: ${widget.userData['customer_id']}");
   }
 
   // Helper method to parse address string into components
@@ -102,7 +107,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _loadProfileImage() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final userId = widget.userData['id'] ?? widget.userData['user_id'];
+      // Ensure userId is a string before using it
+      final userId =
+          widget.userData['id']?.toString() ??
+          widget.userData['user_id']?.toString() ??
+          widget.userData['customer_id']?.toString();
 
       if (userId != null) {
         final imagePath = prefs.getString('user_${userId}_profile_image');
@@ -233,6 +242,47 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return parts.join(', ');
   }
 
+  // Ensure user ID is available in updated data
+  void _ensureUserIdAvailable(Map<String, dynamic> updatedData) {
+    // Check if we have any ID fields
+    bool hasUserID =
+        updatedData.containsKey('user_id') && updatedData['user_id'] != null;
+    bool hasCustomerID =
+        updatedData.containsKey('customer_id') &&
+        updatedData['customer_id'] != null;
+    bool hasID = updatedData.containsKey('id') && updatedData['id'] != null;
+
+    // If we don't have any IDs, try to get them from widget.userData
+    if (!hasUserID && !hasCustomerID && !hasID) {
+      print('No IDs found in updatedData, retrieving from userData...');
+
+      // Copy IDs from widget.userData if available
+      if (widget.userData.containsKey('user_id') &&
+          widget.userData['user_id'] != null) {
+        updatedData['user_id'] = widget.userData['user_id'].toString();
+        print('Retrieved user_id: ${updatedData['user_id']}');
+      }
+
+      if (widget.userData.containsKey('customer_id') &&
+          widget.userData['customer_id'] != null) {
+        updatedData['customer_id'] = widget.userData['customer_id'].toString();
+        print('Retrieved customer_id: ${updatedData['customer_id']}');
+      }
+
+      if (widget.userData.containsKey('id') && widget.userData['id'] != null) {
+        updatedData['id'] = widget.userData['id'].toString();
+        print('Retrieved id: ${updatedData['id']}');
+      }
+
+      // If we still don't have any IDs, log a warning
+      if (!updatedData.containsKey('user_id') &&
+          !updatedData.containsKey('customer_id') &&
+          !updatedData.containsKey('id')) {
+        print('Warning: Cannot find any user IDs in the user data');
+      }
+    }
+  }
+
   Future<void> _saveProfile() async {
     // Validate form
     if (!_formKey.currentState!.validate()) {
@@ -267,22 +317,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         }
       }
 
-      // Keep existing IDs
+      // Keep existing IDs - Convert to String to avoid type mismatches
       if (widget.userData.containsKey('id')) {
-        updatedData['id'] = widget.userData['id'];
+        updatedData['id'] = widget.userData['id'].toString();
       }
       if (widget.userData.containsKey('user_id')) {
-        updatedData['user_id'] = widget.userData['user_id'];
+        updatedData['user_id'] = widget.userData['user_id'].toString();
       }
       if (widget.userData.containsKey('customer_id')) {
-        updatedData['customer_id'] = widget.userData['customer_id'];
+        updatedData['customer_id'] = widget.userData['customer_id'].toString();
       }
+
+      // Ensure at least one user ID is available (fallback mechanism)
+      _ensureUserIdAvailable(updatedData);
+
+      // Debug - print user IDs
+      print('User IDs for profile update:');
+      print('id: ${updatedData['id']}');
+      print('user_id: ${updatedData['user_id']}');
+      print('customer_id: ${updatedData['customer_id']}');
 
       // Save profile image if changed
       if (_imageFile != null) {
-        final userId = updatedData['id'] ?? updatedData['user_id'];
+        final userId =
+            updatedData['id'] ??
+            updatedData['user_id'] ??
+            updatedData['customer_id'];
         if (userId != null) {
-          await _saveProfileImage(userId.toString(), _imageFile!.path);
+          await _saveProfileImage(userId, _imageFile!.path);
+        } else {
+          print('Warning: Cannot save profile image - no user ID available');
         }
       }
 
@@ -329,7 +393,57 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     Map<String, dynamic> updatedData,
   ) async {
     try {
-      // Create a new API service instance instead of using the private one from AuthProvider
+      // Check if we have any user identifier
+      final hasUserId =
+          updatedData.containsKey('user_id') && updatedData['user_id'] != null;
+      final hasCustomerId =
+          updatedData.containsKey('customer_id') &&
+          updatedData['customer_id'] != null;
+      final hasId = updatedData.containsKey('id') && updatedData['id'] != null;
+
+      if (!hasUserId && !hasCustomerId && !hasId) {
+        // Try to get current user info from auth provider
+        // Use the property instead of method
+        final currentUser = authProvider.currentUser;
+
+        if (currentUser.containsKey('logged_in') &&
+                currentUser['logged_in'] == true ||
+            (currentUser.isNotEmpty && currentUser.containsKey('email'))) {
+          // Add the user IDs from the current user data
+          if (currentUser.containsKey('user_id') &&
+              currentUser['user_id'] != null) {
+            updatedData['user_id'] = currentUser['user_id'].toString();
+            print('Added user_id from authProvider: ${updatedData['user_id']}');
+          }
+
+          if (currentUser.containsKey('customer_id') &&
+              currentUser['customer_id'] != null) {
+            updatedData['customer_id'] = currentUser['customer_id'].toString();
+            print(
+              'Added customer_id from authProvider: ${updatedData['customer_id']}',
+            );
+          }
+
+          if (currentUser.containsKey('id') && currentUser['id'] != null) {
+            updatedData['id'] = currentUser['id'].toString();
+            print('Added id from authProvider: ${updatedData['id']}');
+          }
+        }
+
+        // If we still don't have any IDs
+        if (!updatedData.containsKey('user_id') &&
+            !updatedData.containsKey('customer_id') &&
+            !updatedData.containsKey('id')) {
+          print('Warning: Cannot save user data - no user ID');
+          return {
+            'success': false,
+            'error':
+                'Cannot update profile - user ID not found. Please try logging in again.',
+          };
+        }
+      }
+
+      // Create a new API service instance
       final apiService = ApiService();
 
       // First, update the profile on the server via the API
