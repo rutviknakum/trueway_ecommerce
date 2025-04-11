@@ -1542,6 +1542,7 @@ class ApiService {
   }
 
   // Get orders for current user with proper handling
+  // Improved getOrders method for proper handling of new users
   Future<List<Map<String, dynamic>>> getOrders({
     int page = 1,
     int perPage = 10,
@@ -1551,6 +1552,17 @@ class ApiService {
       // Check login status
       final userInfo = await getCurrentUser();
       if (!userInfo["logged_in"]) {
+        print("User not logged in, returning empty orders list");
+        return [];
+      }
+
+      // Check if this is a local user
+      final isLocalUser = userInfo["local_only"] == true;
+
+      // For local users that haven't been synchronized with the server yet,
+      // return an empty list instead of trying to fetch from server
+      if (isLocalUser && userInfo["customer_id"] == null) {
+        print("Local user without customer ID - returning empty orders list");
         return [];
       }
 
@@ -1567,26 +1579,119 @@ class ApiService {
       // If we have a customer ID, add it to the query
       if (userInfo["customer_id"] != null) {
         queryParams['customer'] = userInfo["customer_id"].toString();
+      } else {
+        // If we don't have a customer ID but have a user ID, try to use that
+        if (userInfo["user_id"] != null) {
+          // Some WooCommerce setups allow filtering by user ID instead of customer ID
+          queryParams['user_id'] = userInfo["user_id"].toString();
+        } else {
+          // No customer ID or user ID - return empty list
+          print(
+            "No customer ID or user ID available - returning empty orders list",
+          );
+          return [];
+        }
       }
 
       // Make request with WooCommerce authentication
-      final response = await authenticatedRequest(
-        ApiConfig.ordersEndpoint,
-        method: 'GET',
-        queryParams: queryParams,
-      );
+      try {
+        final response = await authenticatedRequest(
+          ApiConfig.ordersEndpoint,
+          method: 'GET',
+          queryParams: queryParams,
+          timeoutSeconds: 10, // Shorter timeout for better UX
+        );
 
-      if (response.statusCode == 200) {
-        List<dynamic> orders = json.decode(response.body);
-        return orders.cast<Map<String, dynamic>>();
-      } else {
-        print("Failed to fetch orders: ${response.statusCode}");
+        if (response.statusCode == 200) {
+          List<dynamic> orders = json.decode(response.body);
+          return orders.cast<Map<String, dynamic>>();
+        } else {
+          print("Failed to fetch orders: ${response.statusCode}");
+          // Return empty list on error rather than throwing exception
+          return [];
+        }
+      } catch (requestError) {
+        print("Error making orders request: $requestError");
+        // Return empty list on error
         return [];
       }
     } catch (e) {
-      print("Error fetching orders: $e");
+      print("Error in getOrders: $e");
+      // Return empty list instead of throwing to provide better UX
       return [];
     }
+  }
+
+  // Get user's order count - useful for determining if user is new
+  Future<int> getOrderCount() async {
+    try {
+      // Check login status
+      final userInfo = await getCurrentUser();
+      if (!userInfo["logged_in"]) {
+        return 0;
+      }
+
+      // Check if this is a local user
+      final isLocalUser = userInfo["local_only"] == true;
+
+      // For local users, return 0 orders
+      if (isLocalUser && userInfo["customer_id"] == null) {
+        return 0;
+      }
+
+      // If we don't have a customer ID, return 0
+      if (userInfo["customer_id"] == null) {
+        return 0;
+      }
+
+      // Build query parameters - just get 1 order to check if any exist
+      Map<String, dynamic> queryParams = {
+        'page': '1',
+        'per_page': '1',
+        'customer': userInfo["customer_id"].toString(),
+      };
+
+      try {
+        final response = await authenticatedRequest(
+          ApiConfig.ordersEndpoint,
+          method: 'GET',
+          queryParams: queryParams,
+        );
+
+        if (response.statusCode == 200) {
+          // Check if the total count is in the headers
+          final totalCountHeader = response.headers['x-wp-total'];
+          if (totalCountHeader != null) {
+            return int.tryParse(totalCountHeader) ?? 0;
+          }
+
+          // If no header, at least check if array has items
+          List<dynamic> orders = json.decode(response.body);
+          return orders.isEmpty ? 0 : 1; // Return at least 1 if we got results
+        } else {
+          return 0;
+        }
+      } catch (e) {
+        print("Error fetching order count: $e");
+        return 0;
+      }
+    } catch (e) {
+      print("Error in getOrderCount: $e");
+      return 0;
+    }
+  }
+
+  // Check if user is a new customer with no orders
+  Future<bool> isNewCustomer() async {
+    // First check if this is a local user
+    final userInfo = await getCurrentUser();
+    if (userInfo["local_only"] == true) {
+      return true;
+    }
+
+    // Then check if they have any orders
+    final orderCount = await getOrderCount();
+    return orderCount == 0;
   }
 
   // Get single order by ID with proper handling

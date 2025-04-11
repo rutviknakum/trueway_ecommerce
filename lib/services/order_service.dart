@@ -6,7 +6,7 @@ import 'api_service.dart';
 class OrderService {
   final ApiService _apiService = ApiService();
 
-  /// Fetches orders for the logged in user
+  /// Fetches orders for the logged in user with improved handling for new users
   Future<List<Map<String, dynamic>>> fetchOrders({
     int page = 1,
     int perPage = 10,
@@ -16,14 +16,23 @@ class OrderService {
       // Get current user info to check for customer ID
       final userInfo = await _apiService.getCurrentUser();
       if (!userInfo["logged_in"]) {
-        throw Exception("User not logged in");
+        print("User not logged in - returning empty orders list");
+        return []; // Return empty list instead of throwing exception
       }
 
+      // Check if this is a local user
+      final isLocalUser = userInfo["local_only"] == true;
+
+      // Get customer ID - might be null or 0 for new users
       final customerId = userInfo["customer_id"];
-      if (customerId == 0) {
-        throw Exception("No customer ID found");
+
+      // For local users or users without customer ID, return empty list
+      if (isLocalUser || customerId == null || customerId == 0) {
+        print("Local user or no customer ID - returning empty orders list");
+        return []; // Return empty list for new users
       }
 
+      // Build query parameters
       Map<String, dynamic> queryParams = {
         "customer": customerId.toString(),
         "page": page.toString(),
@@ -34,20 +43,49 @@ class OrderService {
         queryParams["status"] = status;
       }
 
+      // Make the API request
       final response = await _apiService.authenticatedRequest(
         ApiConfig.ordersEndpoint,
         method: 'GET',
+        queryParams: queryParams,
       );
 
       if (response.statusCode == 200) {
         List<dynamic> orders = json.decode(response.body);
         return orders.cast<Map<String, dynamic>>();
       } else {
-        throw Exception("Failed to load orders: ${response.statusCode}");
+        print("Failed to load orders: ${response.statusCode}");
+        return []; // Return empty list on API error
       }
     } catch (e) {
       print("Error fetching orders: $e");
-      return [];
+      return []; // Return empty list on any exception
+    }
+  }
+
+  /// Check if the current user is a new customer (has no orders)
+  Future<bool> isNewCustomer() async {
+    try {
+      // Get current user info
+      final userInfo = await _apiService.getCurrentUser();
+
+      // Local users are considered new
+      if (userInfo["local_only"] == true) {
+        return true;
+      }
+
+      // Users without customer ID are considered new
+      final customerId = userInfo["customer_id"];
+      if (customerId == null || customerId == 0) {
+        return true;
+      }
+
+      // Check for any existing orders (fetch just one)
+      final orders = await fetchOrders(page: 1, perPage: 1);
+      return orders.isEmpty;
+    } catch (e) {
+      print("Error checking if user is new: $e");
+      return true; // Assume new user on error
     }
   }
 
@@ -85,6 +123,24 @@ class OrderService {
       final userInfo = await _apiService.getCurrentUser();
       if (!userInfo["logged_in"]) {
         return {"success": false, "error": "User not logged in"};
+      }
+
+      // Check if this is a local user without customer ID
+      final isLocalUser = userInfo["local_only"] == true;
+      final customerId = userInfo["customer_id"];
+
+      if ((isLocalUser || customerId == null || customerId == 0) &&
+          userInfo["email"] != null) {
+        // For local users, try to find or create a customer first
+        try {
+          print("Attempting to find or create customer for local user");
+          // Implementation depends on your API service capabilities
+          // This is a placeholder - you need to implement customer creation
+          // or linking as appropriate for your application
+        } catch (e) {
+          print("Failed to create customer for local user: $e");
+          // Continue with order attempt
+        }
       }
 
       // Map cart items to line_items format
@@ -146,7 +202,6 @@ class OrderService {
 
       // Create order data
       Map<String, dynamic> orderData = {
-        "customer_id": userInfo["customer_id"],
         "payment_method": paymentMethod,
         "payment_method_title": paymentMethodTitle,
         "set_paid": false,
@@ -154,6 +209,11 @@ class OrderService {
         "shipping": shipping,
         "line_items": lineItems,
       };
+
+      // Add customer_id only if it exists and is not 0
+      if (customerId != null && customerId != 0) {
+        orderData["customer_id"] = customerId;
+      }
 
       final response = await _apiService.authenticatedRequest(
         ApiConfig.ordersEndpoint,
