@@ -20,43 +20,183 @@ class OrderService {
         return []; // Return empty list instead of throwing exception
       }
 
+      // For debugging, print user info
+      print("fetchOrders - User info: ${userInfo.toString()}");
+
       // Check if this is a local user
       final isLocalUser = userInfo["local_only"] == true;
 
       // Get customer ID - might be null or 0 for new users
       final customerId = userInfo["customer_id"];
+      final userEmail = userInfo["email"];
 
-      // For local users or users without customer ID, return empty list
-      if (isLocalUser || customerId == null || customerId == 0) {
-        print("Local user or no customer ID - returning empty orders list");
-        return []; // Return empty list for new users
+      // Log what we're doing
+      if (isLocalUser) {
+        print("fetchOrders - Local user detected");
       }
 
-      // Build query parameters
-      Map<String, dynamic> queryParams = {
-        "customer": customerId.toString(),
-        "page": page.toString(),
-        "per_page": perPage.toString(),
-      };
-
-      if (status != null && status.isNotEmpty) {
-        queryParams["status"] = status;
+      if (customerId == null || customerId == 0) {
+        print("fetchOrders - No customer ID available");
       }
 
-      // Make the API request
-      final response = await _apiService.authenticatedRequest(
-        ApiConfig.ordersEndpoint,
-        method: 'GET',
-        queryParams: queryParams,
-      );
+      // Try multiple approaches to get orders:
 
-      if (response.statusCode == 200) {
-        List<dynamic> orders = json.decode(response.body);
-        return orders.cast<Map<String, dynamic>>();
-      } else {
-        print("Failed to load orders: ${response.statusCode}");
-        return []; // Return empty list on API error
+      // 1. First try by customer ID if available
+      if (customerId != null && customerId != 0) {
+        print(
+          "fetchOrders - Trying to fetch orders by customer ID: $customerId",
+        );
+
+        Map<String, dynamic> queryParams = {
+          "customer": customerId.toString(),
+          "page": page.toString(),
+          "per_page": perPage.toString(),
+        };
+
+        if (status != null && status.isNotEmpty) {
+          queryParams["status"] = status;
+        }
+
+        try {
+          final response = await _apiService.authenticatedRequest(
+            ApiConfig.ordersEndpoint,
+            method: 'GET',
+            queryParams: queryParams,
+          );
+
+          if (response.statusCode == 200) {
+            List<dynamic> orders = json.decode(response.body);
+            if (orders.isNotEmpty) {
+              print(
+                "fetchOrders - Found ${orders.length} orders by customer ID",
+              );
+              return orders.cast<Map<String, dynamic>>();
+            }
+            print(
+              "fetchOrders - No orders found by customer ID, trying email next",
+            );
+          } else {
+            print(
+              "fetchOrders - Failed to load orders by ID: ${response.statusCode}",
+            );
+            // Continue to try next method
+          }
+        } catch (e) {
+          print("fetchOrders - Error fetching orders by ID: $e");
+          // Continue to try next method
+        }
       }
+
+      // 2. Try to get orders by email if available
+      if (userEmail != null && userEmail.toString().isNotEmpty) {
+        print("fetchOrders - Trying to fetch orders by email: $userEmail");
+
+        Map<String, dynamic> queryParams = {
+          "customer_email": userEmail.toString(),
+          "page": page.toString(),
+          "per_page": perPage.toString(),
+        };
+
+        if (status != null && status.isNotEmpty) {
+          queryParams["status"] = status;
+        }
+
+        try {
+          final response = await _apiService.authenticatedRequest(
+            ApiConfig.ordersEndpoint,
+            method: 'GET',
+            queryParams: queryParams,
+          );
+
+          if (response.statusCode == 200) {
+            List<dynamic> orders = json.decode(response.body);
+            print("fetchOrders - Found ${orders.length} orders by email");
+            return orders.cast<Map<String, dynamic>>();
+          } else {
+            print(
+              "fetchOrders - Failed to load orders by email: ${response.statusCode}",
+            );
+          }
+        } catch (e) {
+          print("fetchOrders - Error fetching orders by email: $e");
+        }
+      }
+
+      // 3. Last resort - try billing email from receipt
+      if (userEmail != null && userEmail.toString().isNotEmpty) {
+        print("fetchOrders - Trying to fetch orders by billing email");
+
+        Map<String, dynamic> queryParams = {
+          "billing_email": userEmail.toString(),
+          "page": page.toString(),
+          "per_page": perPage.toString(),
+        };
+
+        if (status != null && status.isNotEmpty) {
+          queryParams["status"] = status;
+        }
+
+        try {
+          final response = await _apiService.authenticatedRequest(
+            ApiConfig.ordersEndpoint,
+            method: 'GET',
+            queryParams: queryParams,
+          );
+
+          if (response.statusCode == 200) {
+            List<dynamic> orders = json.decode(response.body);
+            print(
+              "fetchOrders - Found ${orders.length} orders by billing email",
+            );
+            return orders.cast<Map<String, dynamic>>();
+          } else {
+            print(
+              "fetchOrders - Failed to load orders by billing email: ${response.statusCode}",
+            );
+          }
+        } catch (e) {
+          print("fetchOrders - Error fetching orders by billing email: $e");
+        }
+      }
+
+      // 4. Try a direct search using the WordPress API (if available)
+      if (userEmail != null && userEmail.toString().isNotEmpty) {
+        print("fetchOrders - Trying to fetch orders by direct search");
+
+        Map<String, dynamic> queryParams = {
+          "search": userEmail.toString(),
+          "page": page.toString(),
+          "per_page": perPage.toString(),
+        };
+
+        if (status != null && status.isNotEmpty) {
+          queryParams["status"] = status;
+        }
+
+        try {
+          final response = await _apiService.authenticatedRequest(
+            ApiConfig.ordersEndpoint,
+            method: 'GET',
+            queryParams: queryParams,
+          );
+
+          if (response.statusCode == 200) {
+            List<dynamic> orders = json.decode(response.body);
+            print("fetchOrders - Found ${orders.length} orders by search");
+            return orders.cast<Map<String, dynamic>>();
+          } else {
+            print(
+              "fetchOrders - Failed to load orders by search: ${response.statusCode}",
+            );
+          }
+        } catch (e) {
+          print("fetchOrders - Error fetching orders by search: $e");
+        }
+      }
+
+      // If all methods failed, return empty list
+      print("fetchOrders - All methods failed, returning empty list");
+      return [];
     } catch (e) {
       print("Error fetching orders: $e");
       return []; // Return empty list on any exception
