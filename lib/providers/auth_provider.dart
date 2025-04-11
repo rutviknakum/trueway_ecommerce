@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:trueway_ecommerce/services/api_profile_service.dart';
 import 'package:trueway_ecommerce/services/api_service.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -257,8 +256,12 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<Map<String, dynamic>> signup(
-    String name,
+  // Add this new method to the AuthProvider class
+
+  Future<Map<String, dynamic>> signupBasic(
+    String firstName,
+    String lastName,
+    String mobile,
     String email,
     String password,
   ) async {
@@ -266,14 +269,25 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (name.isEmpty || email.isEmpty || password.isEmpty) {
-        return {
-          'success': false,
-          'message': 'Name, email and password are required',
-        };
+      if (firstName.isEmpty ||
+          lastName.isEmpty ||
+          mobile.isEmpty ||
+          email.isEmpty ||
+          password.isEmpty) {
+        return {'success': false, 'message': 'All fields are required'};
       }
 
-      final response = await _apiService.signup(name, email, password);
+      // Combine first and last name for display
+      String fullName = "$firstName $lastName".trim();
+
+      // Call the new API method
+      final response = await _apiService.signupBasic(
+        firstName,
+        lastName,
+        mobile,
+        email,
+        password,
+      );
 
       if (response['success'] == true) {
         _isLoggedIn = await _apiService.isLoggedIn();
@@ -303,9 +317,12 @@ class AuthProvider extends ChangeNotifier {
             // Clear other users' data
             await clearAllUserDataExcept(userId);
 
-            // Make sure name and email are set
-            _currentUser['name'] = name;
+            // Make sure name, email, and phone are set
+            _currentUser['name'] = fullName;
+            _currentUser['first_name'] = firstName;
+            _currentUser['last_name'] = lastName;
             _currentUser['email'] = email;
+            _currentUser['phone'] = mobile;
 
             // Save user data
             await _saveUserData(_currentUser);
@@ -313,13 +330,17 @@ class AuthProvider extends ChangeNotifier {
             // Save email for future reference
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('last_login_email', email);
+            await prefs.setString('user_phone', mobile);
           } catch (userError) {
             print('Error getting user data after signup: $userError');
             // Create minimal user data
             _currentUser = {
               'id': email.hashCode.toString(),
-              'name': name,
+              'name': fullName,
+              'first_name': firstName,
+              'last_name': lastName,
               'email': email,
+              'phone': mobile,
             };
             await _saveUserData(_currentUser);
           }

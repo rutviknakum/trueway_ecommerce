@@ -12,18 +12,27 @@ class SignupScreen extends StatefulWidget {
 class _SignupScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
   final ApiService _apiService = ApiService();
-  TextEditingController nameController = TextEditingController();
+
+  TextEditingController firstNameController = TextEditingController();
+  TextEditingController lastNameController = TextEditingController();
+  TextEditingController mobileController = TextEditingController();
   TextEditingController emailController = TextEditingController();
   TextEditingController passwordController = TextEditingController();
-  bool _obscureText = true;
+  TextEditingController confirmPasswordController = TextEditingController();
+
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   bool _isLoading = false;
   String? _errorMessage;
 
   @override
   void dispose() {
-    nameController.dispose();
+    firstNameController.dispose();
+    lastNameController.dispose();
+    mobileController.dispose();
     emailController.dispose();
     passwordController.dispose();
+    confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -41,17 +50,24 @@ class _SignupScreenState extends State<SignupScreen> {
 
       try {
         // Get form values
-        final name = nameController.text.trim();
+        final firstName = firstNameController.text.trim();
+        final lastName = lastNameController.text.trim();
+        final mobile = mobileController.text.trim();
         final email = emailController.text.trim();
         final password = passwordController.text;
 
         print(
-          "Attempting signup with: Name=$name, Email=$email, Password length=${password.length}",
+          "Attempting signup with: FirstName=$firstName, LastName=$lastName, Mobile=$mobile, Email=$email, Password length=${password.length}",
         );
 
-        // Try the regular signup method instead
-        // We're using this method from the ApiService class directly
-        final response = await _apiService.signup(name, email, password);
+        // Try the new simplified signup method
+        final response = await _apiService.signupBasic(
+          firstName,
+          lastName,
+          mobile,
+          email,
+          password,
+        );
 
         print("Signup response: $response");
 
@@ -169,11 +185,11 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                   SizedBox(height: _errorMessage != null ? 15 : 0),
 
-                  // Name field
+                  // First Name field
                   TextFormField(
-                    controller: nameController,
+                    controller: firstNameController,
                     decoration: InputDecoration(
-                      labelText: "Full Name",
+                      labelText: "First Name",
                       prefixIcon: Icon(Icons.person),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -181,7 +197,48 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty)
-                        return "Enter your name";
+                        return "Enter your first name";
+                      return null;
+                    },
+                    textInputAction: TextInputAction.next,
+                  ),
+                  SizedBox(height: 15),
+
+                  // Last Name field
+                  TextFormField(
+                    controller: lastNameController,
+                    decoration: InputDecoration(
+                      labelText: "Last Name",
+                      prefixIcon: Icon(Icons.person_outline),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty)
+                        return "Enter your last name";
+                      return null;
+                    },
+                    textInputAction: TextInputAction.next,
+                  ),
+                  SizedBox(height: 15),
+
+                  // Mobile Number field
+                  TextFormField(
+                    controller: mobileController,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: "Mobile Number",
+                      prefixIcon: Icon(Icons.phone_android),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty)
+                        return "Enter your mobile number";
+                      if (value.trim().length < 10)
+                        return "Enter a valid mobile number";
                       return null;
                     },
                     textInputAction: TextInputAction.next,
@@ -213,19 +270,19 @@ class _SignupScreenState extends State<SignupScreen> {
                   // Password field
                   TextFormField(
                     controller: passwordController,
-                    obscureText: _obscureText,
+                    obscureText: _obscurePassword,
                     decoration: InputDecoration(
                       labelText: "Password",
                       prefixIcon: Icon(Icons.lock),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscureText
+                          _obscurePassword
                               ? Icons.visibility
                               : Icons.visibility_off,
                         ),
                         onPressed: () {
                           setState(() {
-                            _obscureText = !_obscureText;
+                            _obscurePassword = !_obscurePassword;
                           });
                         },
                       ),
@@ -239,6 +296,42 @@ class _SignupScreenState extends State<SignupScreen> {
                       }
                       if (value.length < 6) {
                         return "Password must be at least 6 characters";
+                      }
+                      return null;
+                    },
+                    textInputAction: TextInputAction.next,
+                  ),
+                  SizedBox(height: 15),
+
+                  // Confirm Password field
+                  TextFormField(
+                    controller: confirmPasswordController,
+                    obscureText: _obscureConfirmPassword,
+                    decoration: InputDecoration(
+                      labelText: "Confirm Password",
+                      prefixIcon: Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirmPassword
+                              ? Icons.visibility
+                              : Icons.visibility_off,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscureConfirmPassword = !_obscureConfirmPassword;
+                          });
+                        },
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return "Please confirm your password";
+                      }
+                      if (value != passwordController.text) {
+                        return "Passwords do not match";
                       }
                       return null;
                     },

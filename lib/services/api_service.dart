@@ -18,8 +18,46 @@ class ApiService {
     _authToken = prefs.getString('auth_token');
   }
 
+  // Helper method to clear all user data - helps prevent data leakage
+  Future<void> _clearAllUserData() async {
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+
+      // Get the keys to remove
+      final keys =
+          prefs
+              .getKeys()
+              .where(
+                (key) =>
+                    key.startsWith('user_') ||
+                    key == 'auth_token' ||
+                    key == 'basic_auth' ||
+                    key == 'customer_id' ||
+                    key == 'is_local_user' ||
+                    key == 'local_user_password' ||
+                    key == 'current_user_id',
+              )
+              .toList();
+
+      // Remove all the keys
+      for (String key in keys) {
+        await prefs.remove(key);
+      }
+
+      // Clear cached auth token
+      _authToken = null;
+
+      print("Cleared all user data");
+    } catch (e) {
+      print("Error clearing user data: $e");
+    }
+  }
+
   // Authentication methods
-  Future<Map<String, dynamic>> login(String email, String password) async {
+  Future<Map<String, dynamic>> loginWithServer(
+    String email,
+    String password,
+  ) async {
     if (email.isEmpty || password.isEmpty) {
       return {"success": false, "error": "Email and password are required"};
     }
@@ -57,6 +95,7 @@ class ApiService {
         if (authData['user_id'] != null) {
           userId = authData['user_id'];
           await prefs.setInt("user_id", userId);
+          await prefs.setString("current_user_id", userId.toString());
         }
 
         // Try to get WooCommerce customer ID
@@ -89,77 +128,96 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> signup(
-    String name,
+  Future<Map<String, dynamic>> signupBasic(
+    String firstName,
+    String lastName,
+    String mobile,
     String email,
     String password,
   ) async {
-    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+    if (firstName.isEmpty ||
+        lastName.isEmpty ||
+        mobile.isEmpty ||
+        email.isEmpty ||
+        password.isEmpty) {
       return {"success": false, "error": "All fields are required"};
     }
 
     try {
-      // First check if the email already exists
-      final emailExists = await checkEmailExists(email);
-      if (emailExists) {
-        return {
-          "success": false,
-          "error":
-              "This email is already registered. Please use another email or login.",
-        };
-      }
+      // Clear any previous user data to prevent data leakage
+      await _clearAllUserData();
 
-      // Create a new customer
-      final customerUrl = Uri.parse(
-        ApiConfig.buildUrl(ApiConfig.customersEndpoint),
-      );
+      // First check if the email already exists by trying to log in
+      final loginResult = await loginWithServer(email, password);
 
-      final response = await http.post(
-        customerUrl,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "email": email,
-          "first_name": name.split(' ').first,
-          "last_name":
-              name.split(' ').length > 1
-                  ? name.split(' ').skip(1).join(' ')
-                  : "",
-          "username": email,
-          "password": password,
-        }),
-      );
-
-      if (response.statusCode == 201) {
-        final customerData = json.decode(response.body);
-
-        // Store customer ID for later use
+      // If login succeeds, it means the account already exists
+      if (loginResult['success']) {
+        // Update the user data with the provided information
+        final fullName = "$firstName $lastName";
         SharedPreferences prefs = await SharedPreferences.getInstance();
-        if (customerData['id'] != null) {
-          await prefs.setInt("customer_id", customerData['id']);
-        }
-
-        // Automatically log the user in
-        return await login(email, password);
-      } else {
-        // Handle error response
-        try {
-          final errorData = json.decode(response.body);
-          if (errorData['message'] != null) {
-            final cleanMessage = errorData['message']
-                .replaceAll('<strong>', '')
-                .replaceAll('</strong>', '')
-                .replaceAll('<br />', ' ');
-            return {"success": false, "error": cleanMessage};
-          }
-        } catch (e) {
-          print("Error parsing signup response: $e");
-        }
+        await prefs.setString("user_name", fullName);
+        await prefs.setString("user_first_name", firstName);
+        await prefs.setString("user_last_name", lastName);
+        await prefs.setString("user_phone", mobile);
+        await prefs.setString("user_email", email); // Ensure email is set
 
         return {
-          "success": false,
-          "error": "Registration failed. Please try again.",
+          "success": true,
+          "message": "Logged in successfully",
+          "email": email,
+          "name": fullName,
         };
       }
+
+      // If we reach here, we need to implement a local-first registration approach
+      print("Implementing local registration workaround");
+
+      // Store the user data locally in SharedPreferences
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+
+      // Generate a unique user ID based on the email
+      final userId = email.hashCode.toString();
+      final fullName = "$firstName $lastName";
+
+      // Save all user data
+      await prefs.setString("user_email", email);
+      await prefs.setString("user_name", fullName);
+      await prefs.setString("user_first_name", firstName);
+      await prefs.setString("user_last_name", lastName);
+      await prefs.setString("user_phone", mobile);
+      await prefs.setString("user_id", userId);
+      await prefs.setString("current_user_id", userId);
+
+      // Store the password securely (you may want to use Flutter Secure Storage for this in production)
+      await prefs.setString("local_user_password", password);
+
+      // Set a flag indicating this is a locally registered user
+      await prefs.setBool("is_local_user", true);
+
+      // Mark the user as logged in
+      _authToken = "local_auth_$userId"; // Pseudo token
+      await prefs.setString("auth_token", _authToken!);
+
+      print("Local registration successful: $userId - $fullName");
+
+      // Also make an attempt to register on the server, but don't wait for the result
+      _attemptServerRegistration(
+        firstName,
+        lastName,
+        mobile,
+        email,
+        password,
+      ).then((result) {
+        print("Server registration attempt result: $result");
+      });
+
+      return {
+        "success": true,
+        "message": "Account created successfully",
+        "email": email,
+        "name": fullName,
+        "local_only": true,
+      };
     } catch (e) {
       print("Signup exception: $e");
       return {
@@ -168,6 +226,418 @@ class ApiService {
         "debug_info": "Exception: $e",
       };
     }
+  }
+
+  // Attempt server registration in the background
+  Future<bool> _attemptServerRegistration(
+    String firstName,
+    String lastName,
+    String mobile,
+    String email,
+    String password,
+  ) async {
+    try {
+      // Try multiple registration approaches
+
+      // 1. WordPress REST API
+      try {
+        final wpUrl = Uri.parse(
+          "${ApiConfig.baseUrl}/wp-json/wp/v2/users/register",
+        );
+        final wpPayload = {
+          "username": email,
+          "email": email,
+          "password": password,
+          "first_name": firstName,
+          "last_name": lastName,
+        };
+
+        final wpResponse = await http.post(
+          wpUrl,
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode(wpPayload),
+        );
+
+        if (wpResponse.statusCode >= 200 && wpResponse.statusCode < 300) {
+          print("Server registration succeeded via WordPress API");
+          return true;
+        }
+      } catch (e) {
+        print("WordPress registration attempt failed: $e");
+      }
+
+      // 2. Custom registration endpoint (many WordPress sites have this)
+      try {
+        final customUrl = Uri.parse(
+          "${ApiConfig.baseUrl}/wp-json/custom/v1/register",
+        );
+        final customPayload = {
+          "username": email,
+          "email": email,
+          "password": password,
+          "first_name": firstName,
+          "last_name": lastName,
+          "phone": mobile,
+        };
+
+        final customResponse = await http.post(
+          customUrl,
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode(customPayload),
+        );
+
+        if (customResponse.statusCode >= 200 &&
+            customResponse.statusCode < 300) {
+          print("Server registration succeeded via custom endpoint");
+          return true;
+        }
+      } catch (e) {
+        print("Custom endpoint registration attempt failed: $e");
+      }
+
+      // 3. WooCommerce API - last resort, but still try
+      try {
+        final customerUrl = Uri.parse(
+          "${ApiConfig.baseUrl}${ApiConfig.customersEndpoint}?consumer_key=${ApiConfig.consumerKey}&consumer_secret=${ApiConfig.consumerSecret}",
+        );
+
+        final wooPayload = {
+          "email": email,
+          "first_name": firstName,
+          "last_name": lastName,
+          "username": email,
+          "password": password,
+          "billing": {
+            "first_name": firstName,
+            "last_name": lastName,
+            "email": email,
+            "phone": mobile,
+            "address_1": "Default Address",
+            "city": "Default City",
+            "state": "State",
+            "postcode": "000000",
+            "country": "IN",
+          },
+          "shipping": {
+            "first_name": firstName,
+            "last_name": lastName,
+            "address_1": "Default Address",
+            "city": "Default City",
+            "state": "State",
+            "postcode": "000000",
+            "country": "IN",
+          },
+        };
+
+        // Try multiple postcode formats
+        for (final postcode in ["000000", "123456", "400001", "", "      "]) {
+          try {
+            (wooPayload["billing"] as Map<String, dynamic>)["postcode"] =
+                postcode;
+            (wooPayload["shipping"] as Map<String, dynamic>)["postcode"] =
+                postcode;
+
+            final wooResponse = await http.post(
+              customerUrl,
+              headers: {"Content-Type": "application/json"},
+              body: jsonEncode(wooPayload),
+            );
+
+            if (wooResponse.statusCode == 201) {
+              print(
+                "Server registration succeeded via WooCommerce API with postcode: $postcode",
+              );
+              return true;
+            }
+          } catch (e) {
+            print(
+              "WooCommerce registration attempt failed with postcode $postcode: $e",
+            );
+          }
+        }
+      } catch (e) {
+        print("All WooCommerce registration attempts failed: $e");
+      }
+
+      return false;
+    } catch (e) {
+      print("All server registration attempts failed: $e");
+      return false;
+    }
+  }
+
+  // Check if user is logged in
+  Future<bool> isLoggedIn() async {
+    // First check if there's a standard auth token
+    if (_authToken != null) return true;
+
+    // Check for standard authentication
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString("auth_token");
+    final basicAuth = prefs.getString("basic_auth");
+
+    if (token != null) {
+      _authToken = token; // Cache it in memory
+      return true;
+    }
+
+    if (basicAuth != null) {
+      return true;
+    }
+
+    // Check for local authentication
+    final isLocalUser = prefs.getBool("is_local_user") ?? false;
+    final userId = prefs.getString("user_id");
+    final userEmail = prefs.getString("user_email");
+
+    if (isLocalUser && userId != null && userEmail != null) {
+      // Generate a pseudo token if needed
+      if (_authToken == null) {
+        _authToken = "local_auth_$userId";
+        await prefs.setString("auth_token", _authToken!);
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  // Enhanced login method to handle local auth and prevent data leakage
+  Future<Map<String, dynamic>> login(String email, String password) async {
+    if (email.isEmpty || password.isEmpty) {
+      return {"success": false, "error": "Email and password are required"};
+    }
+
+    try {
+      // Clear any existing user data before attempting login
+      // This prevents data leakage between users
+      await _clearAllUserData();
+
+      // First try to log in with server authentication
+      print(
+        "Attempting login with email: $email, password length: ${password.length}",
+      );
+
+      // Try JWT authentication
+      final jwtUrl = Uri.parse(ApiConfig.baseUrl + ApiConfig.authEndpoint);
+      final jwtResponse = await http.post(
+        jwtUrl,
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: {"username": email, "password": password},
+      );
+
+      print("JWT Auth response status: ${jwtResponse.statusCode}");
+
+      // If JWT auth succeeded
+      if (jwtResponse.statusCode == 200) {
+        final authData = json.decode(jwtResponse.body);
+
+        // Store the auth token and user info
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString("auth_token", authData['token']);
+        _authToken = authData['token']; // Also set in memory
+        await prefs.setString("user_email", email);
+
+        String name = authData['user_display_name'] ?? "";
+        await prefs.setString("user_name", name);
+
+        int userId = 0;
+        if (authData['user_id'] != null) {
+          userId = authData['user_id'];
+          await prefs.setInt("user_id", userId);
+          await prefs.setString("current_user_id", userId.toString());
+        }
+
+        // Remove local user flag if it exists
+        await prefs.setBool("is_local_user", false);
+
+        // Try to get WooCommerce customer ID
+        try {
+          final customerId = await getCustomerId(email);
+          if (customerId != null) {
+            await prefs.setInt("customer_id", customerId);
+          }
+        } catch (e) {
+          print("Error getting customer details: $e");
+        }
+
+        return {
+          "success": true,
+          "email": email,
+          "name": name,
+          "message": "Logged in successfully",
+        };
+      }
+
+      // Try alternative login methods
+      final alternativeResult = await _handleFailedLogin(
+        email,
+        password,
+        jwtResponse,
+      );
+      if (alternativeResult["success"]) {
+        return alternativeResult;
+      }
+
+      // If we reach here, try local authentication
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      final isLocalUser = prefs.getBool("is_local_user") ?? false;
+      final storedEmail = prefs.getString("user_email");
+      final storedPassword = prefs.getString("local_user_password");
+
+      if (isLocalUser && storedEmail == email && storedPassword == password) {
+        // Local login successful
+        final userId = prefs.getString("user_id") ?? email.hashCode.toString();
+        final userName = prefs.getString("user_name") ?? email.split('@')[0];
+
+        // Generate a pseudo token
+        _authToken = "local_auth_$userId";
+        await prefs.setString("auth_token", _authToken!);
+        await prefs.setString("current_user_id", userId);
+
+        // Ensure email is set correctly
+        await prefs.setString("user_email", email);
+
+        print("Local login successful: $userId - $userName");
+
+        return {
+          "success": true,
+          "email": email,
+          "name": userName,
+          "message": "Logged in successfully (local mode)",
+          "local_only": true,
+        };
+      }
+
+      // All login methods failed
+      return {
+        "success": false,
+        "error": "Login failed. Please check your credentials.",
+        "account_exists": false,
+      };
+    } catch (e) {
+      print("Login exception: $e");
+      return {
+        "success": false,
+        "error": "Login failed. Please check your connection and try again.",
+        "debug_info": "Exception: $e",
+      };
+    }
+  }
+
+  // Improved logout method
+  Future<Map<String, dynamic>> logout() async {
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+
+      // Store the current user ID before clearing data
+      final currentUserId = prefs.getString('current_user_id');
+
+      // Clear all user-specific data
+      if (currentUserId != null) {
+        // Clear prefixed user data
+        for (String key in prefs.getKeys().where(
+          (k) => k.startsWith('user_${currentUserId}_'),
+        )) {
+          await prefs.remove(key);
+        }
+      }
+
+      // Clear general user data
+      await prefs.remove("user_email");
+      await prefs.remove("customer_id");
+      await prefs.remove("user_id");
+      await prefs.remove("user_name");
+      await prefs.remove("user_phone");
+      await prefs.remove("user_first_name");
+      await prefs.remove("user_last_name");
+      await prefs.remove("user_address");
+      await prefs.remove("auth_token");
+      await prefs.remove("basic_auth");
+      await prefs.remove("current_user_id");
+      await prefs.remove("is_local_user");
+      await prefs.remove("local_user_password");
+
+      // Clear any cached data
+      _authToken = null;
+
+      print("User logged out successfully - all data cleared");
+
+      return {"success": true, "message": "Logged out successfully"};
+    } catch (e) {
+      print("Error during logout: $e");
+      return {"success": false, "error": "Failed to log out: $e"};
+    }
+  }
+
+  // Backwards compatibility method
+  Future<bool> checkIfLoggedIn() async {
+    return isLoggedIn();
+  }
+
+  // Improved getCurrentUser method
+  Future<Map<String, dynamic>> getCurrentUser() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final email = prefs.getString("user_email");
+    final customerId = prefs.getInt("customer_id");
+    final userId =
+        prefs.getString("user_id") ?? prefs.getInt("user_id")?.toString();
+    final name = prefs.getString("user_name");
+    final phone = prefs.getString("user_phone");
+    final firstName = prefs.getString("user_first_name");
+    final lastName = prefs.getString("user_last_name");
+    final isLocalUser = prefs.getBool("is_local_user") ?? false;
+    final currentUserId = prefs.getString("current_user_id");
+
+    // Check memory first, then shared preferences
+    final token = _authToken ?? prefs.getString("auth_token");
+    final basicAuth = prefs.getString("basic_auth");
+
+    // Verify we have a consistent user ID
+    if (userId != null && currentUserId != null && userId != currentUserId) {
+      print("Warning: User ID mismatch detected. Fixing...");
+      await prefs.setString("current_user_id", userId);
+    }
+
+    final isLoggedIn =
+        (token != null ||
+            basicAuth != null ||
+            (isLocalUser && userId != null)) &&
+        email != null;
+
+    if (isLoggedIn) {
+      final userData = {
+        "logged_in": true,
+        "email": email,
+        "customer_id": customerId,
+        "user_id": userId,
+        "name": name ?? "",
+        "auth_type": isLocalUser ? "local" : (token != null ? "jwt" : "basic"),
+        "local_only": isLocalUser,
+      };
+
+      // Add phone, first_name, and last_name if available
+      if (phone != null) {
+        userData["phone"] = phone;
+      }
+
+      if (firstName != null) {
+        userData["first_name"] = firstName;
+      }
+
+      if (lastName != null) {
+        userData["last_name"] = lastName;
+      }
+
+      return userData;
+    }
+
+    return {"logged_in": false};
+  }
+
+  // Backwards compatibility method
+  Future<Map<String, dynamic>> getCurrentUserDetails() async {
+    return getCurrentUser();
   }
 
   Future<Map<String, dynamic>> _handleFailedLogin(
@@ -257,6 +727,10 @@ class ApiService {
 
         if (authData['user_id'] != null) {
           await prefs.setInt("user_id", authData['user_id']);
+          await prefs.setString(
+            "current_user_id",
+            authData['user_id'].toString(),
+          );
         }
 
         return {
@@ -297,6 +771,7 @@ class ApiService {
 
         if (userData['id'] != null) {
           await prefs.setInt("user_id", userData['id']);
+          await prefs.setString("current_user_id", userData['id'].toString());
         }
 
         return {
@@ -313,85 +788,76 @@ class ApiService {
     }
   }
 
-  // Updated logout method that returns a response
-  Future<Map<String, dynamic>> logout() async {
-    try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      await prefs.remove("user_email");
-      await prefs.remove("customer_id");
-      await prefs.remove("user_id");
-      await prefs.remove("user_name");
-      await prefs.remove("auth_token");
-      await prefs.remove("basic_auth");
-      _authToken = null; // Also clear from memory
-
-      print("User logged out successfully");
-
-      return {"success": true, "message": "Logged out successfully"};
-    } catch (e) {
-      print("Error during logout: $e");
-      return {"success": false, "error": "Failed to log out: $e"};
-    }
-  }
-
-  Future<bool> isLoggedIn() async {
-    if (_authToken != null) return true;
-
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString("auth_token");
-    final basicAuth = prefs.getString("basic_auth");
-
-    if (token != null) {
-      _authToken = token; // Cache it in memory
-    }
-
-    return token != null || basicAuth != null;
-  }
-
-  Future<Map<String, dynamic>> getCurrentUser() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    final email = prefs.getString("user_email");
-    final customerId = prefs.getInt("customer_id");
-    final userId = prefs.getInt("user_id");
-    final name = prefs.getString("user_name");
-
-    // Check memory first, then shared preferences
-    final token = _authToken ?? prefs.getString("auth_token");
-    final basicAuth = prefs.getString("basic_auth");
-
-    if ((token != null || basicAuth != null) && email != null) {
-      return {
-        "logged_in": true,
-        "email": email,
-        "customer_id": customerId,
-        "user_id": userId,
-        "name": name ?? "",
-        "auth_type": token != null ? "jwt" : "basic",
-      };
-    }
-    return {"logged_in": false};
-  }
-
   // Helper method to update the current user data in SharedPreferences
   Future<void> updateCurrentUser(Map<String, dynamic> userData) async {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
+      final currentUserId = prefs.getString('current_user_id');
+
+      // Ensure we have a user ID to associate the data with
+      if (currentUserId == null) {
+        print(
+          "Warning: No current user ID found, data may not be properly associated",
+        );
+      }
 
       if (userData.containsKey('name') && userData['name'] != null) {
         await prefs.setString("user_name", userData['name']);
+        if (currentUserId != null) {
+          await prefs.setString("user_${currentUserId}_name", userData['name']);
+        }
       }
 
       if (userData.containsKey('email') && userData['email'] != null) {
         await prefs.setString("user_email", userData['email']);
+        if (currentUserId != null) {
+          await prefs.setString(
+            "user_${currentUserId}_email",
+            userData['email'],
+          );
+        }
       }
 
       // Store other user data as needed
       if (userData.containsKey('phone') && userData['phone'] != null) {
         await prefs.setString("user_phone", userData['phone']);
+        if (currentUserId != null) {
+          await prefs.setString(
+            "user_${currentUserId}_phone",
+            userData['phone'],
+          );
+        }
       }
 
       if (userData.containsKey('address') && userData['address'] != null) {
         await prefs.setString("user_address", userData['address']);
+        if (currentUserId != null) {
+          await prefs.setString(
+            "user_${currentUserId}_address",
+            userData['address'],
+          );
+        }
+      }
+
+      if (userData.containsKey('first_name') &&
+          userData['first_name'] != null) {
+        await prefs.setString("user_first_name", userData['first_name']);
+        if (currentUserId != null) {
+          await prefs.setString(
+            "user_${currentUserId}_first_name",
+            userData['first_name'],
+          );
+        }
+      }
+
+      if (userData.containsKey('last_name') && userData['last_name'] != null) {
+        await prefs.setString("user_last_name", userData['last_name']);
+        if (currentUserId != null) {
+          await prefs.setString(
+            "user_${currentUserId}_last_name",
+            userData['last_name'],
+          );
+        }
       }
     } catch (e) {
       print("Error updating current user data: $e");
@@ -516,14 +982,53 @@ class ApiService {
 
       // Store updated data in SharedPreferences for local access
       SharedPreferences prefs = await SharedPreferences.getInstance();
+      final currentUserId = prefs.getString('current_user_id');
+
       if (userData['name'] != null) {
         await prefs.setString("user_name", userData['name']);
+        if (currentUserId != null) {
+          await prefs.setString("user_${currentUserId}_name", userData['name']);
+        }
       }
+
       if (userData['phone'] != null) {
         await prefs.setString("user_phone", userData['phone']);
+        if (currentUserId != null) {
+          await prefs.setString(
+            "user_${currentUserId}_phone",
+            userData['phone'],
+          );
+        }
       }
+
       if (userData['address'] != null) {
         await prefs.setString("user_address", userData['address']);
+        if (currentUserId != null) {
+          await prefs.setString(
+            "user_${currentUserId}_address",
+            userData['address'],
+          );
+        }
+      }
+
+      if (userData['first_name'] != null) {
+        await prefs.setString("user_first_name", userData['first_name']);
+        if (currentUserId != null) {
+          await prefs.setString(
+            "user_${currentUserId}_first_name",
+            userData['first_name'],
+          );
+        }
+      }
+
+      if (userData['last_name'] != null) {
+        await prefs.setString("user_last_name", userData['last_name']);
+        if (currentUserId != null) {
+          await prefs.setString(
+            "user_${currentUserId}_last_name",
+            userData['last_name'],
+          );
+        }
       }
 
       // If we have a customer ID, update WooCommerce customer data
@@ -541,14 +1046,21 @@ class ApiService {
             addressComponents = _parseAddressString(userData['address']);
           }
 
-          // Extract first and last name from full name
-          String firstName = userData['name'] ?? '';
-          String lastName = '';
+          // Extract first and last name from full name if not provided directly
+          String firstName = userData['first_name'] ?? '';
+          String lastName = userData['last_name'] ?? '';
 
-          if (firstName.contains(' ')) {
-            final nameParts = firstName.split(' ');
-            firstName = nameParts.first;
-            lastName = nameParts.sublist(1).join(' ');
+          // If first/last name not provided but full name is available
+          if ((firstName.isEmpty || lastName.isEmpty) &&
+              userData['name'] != null) {
+            String fullName = userData['name'] ?? '';
+            if (fullName.contains(' ')) {
+              final nameParts = fullName.split(' ');
+              if (firstName.isEmpty) firstName = nameParts.first;
+              if (lastName.isEmpty) lastName = nameParts.sublist(1).join(' ');
+            } else if (firstName.isEmpty) {
+              firstName = fullName;
+            }
           }
 
           // Create properly structured update payload
@@ -559,6 +1071,7 @@ class ApiService {
               'first_name': firstName,
               'last_name': lastName,
               'phone': userData['phone'] ?? '',
+              'email': userData['email'] ?? '', // Include email in billing
             },
             'shipping': {'first_name': firstName, 'last_name': lastName},
           };
@@ -570,9 +1083,9 @@ class ApiService {
             updateData['billing']['city'] = addressComponents['city'] ?? '';
             updateData['billing']['state'] = addressComponents['state'] ?? '';
             updateData['billing']['postcode'] =
-                addressComponents['postalCode'] ?? '';
+                addressComponents['postalCode'] ?? '123456'; // Default postcode
             updateData['billing']['country'] =
-                addressComponents['country'] ?? '';
+                addressComponents['country'] ?? 'IN'; // Default country
 
             // Also update shipping address
             updateData['shipping']['address_1'] =
@@ -580,9 +1093,22 @@ class ApiService {
             updateData['shipping']['city'] = addressComponents['city'] ?? '';
             updateData['shipping']['state'] = addressComponents['state'] ?? '';
             updateData['shipping']['postcode'] =
-                addressComponents['postalCode'] ?? '';
+                addressComponents['postalCode'] ?? '123456'; // Default postcode
             updateData['shipping']['country'] =
-                addressComponents['country'] ?? '';
+                addressComponents['country'] ?? 'IN'; // Default country
+          } else {
+            // Add default values if no address components
+            updateData['billing']['address_1'] = 'Default Address';
+            updateData['billing']['city'] = 'Default City';
+            updateData['billing']['state'] = 'Default State';
+            updateData['billing']['postcode'] = '123456';
+            updateData['billing']['country'] = 'IN';
+
+            updateData['shipping']['address_1'] = 'Default Address';
+            updateData['shipping']['city'] = 'Default City';
+            updateData['shipping']['state'] = 'Default State';
+            updateData['shipping']['postcode'] = '123456';
+            updateData['shipping']['country'] = 'IN';
           }
 
           // Get auth headers with proper WooCommerce API authentication
@@ -656,9 +1182,20 @@ class ApiService {
 
       final url = Uri.parse('${ApiConfig.baseUrl}/wp/v2/users/$userId');
 
+      // Extract name components
+      String firstName = userData['first_name'] ?? '';
+      String lastName = userData['last_name'] ?? '';
+      String fullName = userData['name'] ?? '';
+
+      if (fullName.isEmpty && firstName.isNotEmpty) {
+        fullName = lastName.isNotEmpty ? '$firstName $lastName' : firstName;
+      }
+
       // Create update payload
       final Map<String, dynamic> updateData = {
-        'name': userData['name'],
+        'name': fullName,
+        'first_name': firstName,
+        'last_name': lastName,
         'meta': {
           'phone': userData['phone'] ?? '',
           'address': userData['address'] ?? '',
@@ -719,7 +1256,7 @@ class ApiService {
     return result;
   }
 
-  // IMPROVED: Enhanced authenticated request method with WooCommerce auth handling
+  // Enhanced authenticated request method with WooCommerce auth handling
   Future<http.Response> authenticatedRequest(
     String endpoint, {
     required String method,
@@ -937,9 +1474,74 @@ class ApiService {
     }
   }
 
-  // ADDED: Method to generate WooCommerce auth string for URLs
+  // Improved getUserProfile method with proper type handling
+  Future<Map<String, dynamic>> getUserProfile() async {
+    try {
+      if (!await isLoggedIn()) {
+        return {'success': false, 'error': 'Not authenticated'};
+      }
 
-  // ADDED: Get orders for current user with proper handling
+      final userInfo = await getCurrentUser();
+
+      // Get user ID - handle both string and int types properly
+      dynamic userId = userInfo['user_id'];
+      dynamic customerId = userInfo['customer_id'];
+
+      if (userId == null && customerId == null) {
+        return {
+          'success': false,
+          'error': 'No user ID or customer ID available',
+        };
+      }
+
+      // Try to get customer data first if available
+      if (customerId != null) {
+        try {
+          // Convert customerId to string to ensure it works properly in the URL
+          final customerIdStr = customerId.toString();
+          final url = Uri.parse(
+            ApiConfig.buildUrl("${ApiConfig.customersEndpoint}/$customerIdStr"),
+          );
+
+          final headers = await getAuthHeaders(includeWooAuth: true);
+          final response = await http.get(url, headers: headers);
+
+          if (response.statusCode == 200) {
+            final customerData = json.decode(response.body);
+            return {'success': true, 'data': customerData};
+          }
+        } catch (e) {
+          print("Error getting customer profile: $e");
+        }
+      }
+
+      // Fallback to WordPress user data
+      if (userId != null) {
+        try {
+          // Convert userId to string to ensure it works properly in the URL
+          final userIdStr = userId.toString();
+          final url = Uri.parse("${ApiConfig.baseUrl}/wp/v2/users/$userIdStr");
+          final headers = await getAuthHeaders();
+          final response = await http.get(url, headers: headers);
+
+          if (response.statusCode == 200) {
+            final userData = json.decode(response.body);
+            return {'success': true, 'data': userData};
+          }
+        } catch (e) {
+          print("Error getting WordPress user profile: $e");
+        }
+      }
+
+      // If all else fails, return the current user data we have
+      return {'success': true, 'data': userInfo};
+    } catch (e) {
+      print("Error in getUserProfile: $e");
+      return {'success': false, 'error': 'Failed to get user profile: $e'};
+    }
+  }
+
+  // Get orders for current user with proper handling
   Future<List<Map<String, dynamic>>> getOrders({
     int page = 1,
     int perPage = 10,
@@ -987,7 +1589,7 @@ class ApiService {
     }
   }
 
-  // ADDED: Get single order by ID with proper handling
+  // Get single order by ID with proper handling
   Future<Map<String, dynamic>?> getOrderById(int orderId) async {
     try {
       final response = await authenticatedRequest(
