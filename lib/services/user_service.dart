@@ -28,6 +28,18 @@ class UserService {
       final token = await _storage.getAuthToken();
       final basicAuth = await _storage.getBasicAuth();
 
+      // Debug the current user state
+      print("DEBUG - getCurrentUser - Email: $email");
+      print("DEBUG - getCurrentUser - User ID: $userId");
+      print("DEBUG - getCurrentUser - Customer ID: $customerId");
+      print(
+        "DEBUG - getCurrentUser - Token: ${token != null ? 'exists' : 'null'}",
+      );
+      print(
+        "DEBUG - getCurrentUser - Basic Auth: ${basicAuth != null ? 'exists' : 'null'}",
+      );
+      print("DEBUG - getCurrentUser - Is Local User: $isLocalUser");
+
       // Verify we have a consistent user ID
       if (userId != null && currentUserId != null && userId != currentUserId) {
         print("Warning: User ID mismatch detected. Fixing...");
@@ -68,6 +80,7 @@ class UserService {
         return userData;
       }
 
+      print("User not logged in - returning logged_in: false");
       return {"logged_in": false};
     } catch (e) {
       print("Error in getCurrentUser: $e");
@@ -332,6 +345,9 @@ class UserService {
   Future<Map<String, dynamic>> getUserProfile() async {
     try {
       final userInfo = await getCurrentUser();
+
+      print("DEBUG - getUserProfile - User Info: $userInfo");
+
       if (!userInfo["logged_in"]) {
         return {'success': false, 'error': 'Not authenticated'};
       }
@@ -390,12 +406,29 @@ class UserService {
         basicAuth: basicAuth,
       );
 
+      print("DEBUG - Fetching WooCommerce profile - URL: $url");
+      print(
+        "DEBUG - Fetching WooCommerce profile - auth token exists: ${authToken != null}",
+      );
+
       final response = await http.get(url, headers: headers);
+
+      print(
+        "DEBUG - WooCommerce profile response status: ${response.statusCode}",
+      );
 
       if (response.statusCode == 200) {
         final customerData = json.decode(response.body);
         return {'success': true, 'data': customerData};
       }
+      // Handle 401/403 by returning failure, but don't log the user out
+      else if (response.statusCode == 401 || response.statusCode == 403) {
+        print(
+          "Authentication issue when fetching WooCommerce customer profile: ${response.statusCode}",
+        );
+        return {'success': false, 'auth_error': true};
+      }
+
       return {'success': false};
     } catch (e) {
       print("Error getting customer profile: $e");
@@ -415,12 +448,26 @@ class UserService {
         basicAuth: basicAuth,
       );
 
+      print("DEBUG - Fetching WordPress profile - URL: $url");
+
       final response = await http.get(url, headers: headers);
+
+      print(
+        "DEBUG - WordPress profile response status: ${response.statusCode}",
+      );
 
       if (response.statusCode == 200) {
         final userData = json.decode(response.body);
         return {'success': true, 'data': userData};
       }
+      // Handle 401/403 by returning failure, but don't log the user out
+      else if (response.statusCode == 401 || response.statusCode == 403) {
+        print(
+          "Authentication issue when fetching WordPress user profile: ${response.statusCode}",
+        );
+        return {'success': false, 'auth_error': true};
+      }
+
       return {'success': false};
     } catch (e) {
       print("Error getting WordPress user profile: $e");
@@ -548,6 +595,7 @@ class UserService {
         return orders.cast<Map<String, dynamic>>();
       } else {
         print("Failed to fetch orders: ${response.statusCode}");
+        // Don't log the user out for API failures
         return [];
       }
     } catch (e) {
@@ -607,6 +655,7 @@ class UserService {
         List<dynamic> orders = json.decode(response.body);
         return orders.isEmpty ? 0 : 1;
       }
+      // Don't log the user out for API failures
       return 0;
     } catch (e) {
       print("Error in getOrderCount: $e");
@@ -644,6 +693,7 @@ class UserService {
         return json.decode(response.body);
       } else {
         print("Failed to fetch order #$orderId: ${response.statusCode}");
+        // Don't log the user out for API failures
         return null;
       }
     } catch (e) {

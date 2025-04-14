@@ -85,7 +85,13 @@ class StorageService {
   // Authentication token methods
   Future<String?> getAuthToken() async {
     final prefs = await _getPrefs();
-    return prefs.getString('auth_token');
+    String? token = prefs.getString('auth_token');
+
+    // Additional safety check to handle 'null' string value
+    if (token == 'null' || token == '') {
+      return null;
+    }
+    return token;
   }
 
   Future<void> setAuthToken(String token) async {
@@ -96,7 +102,13 @@ class StorageService {
   // Basic auth methods
   Future<String?> getBasicAuth() async {
     final prefs = await _getPrefs();
-    return prefs.getString('basic_auth');
+    String? auth = prefs.getString('basic_auth');
+
+    // Additional safety check to handle 'null' string value
+    if (auth == 'null' || auth == '') {
+      return null;
+    }
+    return auth;
   }
 
   Future<void> setBasicAuth(String basicAuth) async {
@@ -107,7 +119,13 @@ class StorageService {
   // User data methods
   Future<String?> getUserEmail() async {
     final prefs = await _getPrefs();
-    return prefs.getString('user_email');
+    String? email = prefs.getString('user_email');
+
+    // Additional check for empty or 'null' string
+    if (email == null || email.isEmpty || email == 'null') {
+      return null;
+    }
+    return email;
   }
 
   Future<void> setUserEmail(String email) async {
@@ -117,7 +135,13 @@ class StorageService {
 
   Future<String?> getUserName() async {
     final prefs = await _getPrefs();
-    return prefs.getString('user_name');
+    String? name = prefs.getString('user_name');
+
+    // Additional check for empty or 'null' string
+    if (name == null || name.isEmpty || name == 'null') {
+      return null;
+    }
+    return name;
   }
 
   Future<void> setUserName(String name) async {
@@ -127,7 +151,13 @@ class StorageService {
 
   Future<String?> getUserFirstName() async {
     final prefs = await _getPrefs();
-    return prefs.getString('user_first_name');
+    String? firstName = prefs.getString('user_first_name');
+
+    // Additional check for empty or 'null' string
+    if (firstName == null || firstName.isEmpty || firstName == 'null') {
+      return null;
+    }
+    return firstName;
   }
 
   Future<void> setUserFirstName(String firstName) async {
@@ -137,7 +167,13 @@ class StorageService {
 
   Future<String?> getUserLastName() async {
     final prefs = await _getPrefs();
-    return prefs.getString('user_last_name');
+    String? lastName = prefs.getString('user_last_name');
+
+    // Additional check for empty or 'null' string
+    if (lastName == null || lastName.isEmpty || lastName == 'null') {
+      return null;
+    }
+    return lastName;
   }
 
   Future<void> setUserLastName(String lastName) async {
@@ -147,7 +183,13 @@ class StorageService {
 
   Future<String?> getUserPhone() async {
     final prefs = await _getPrefs();
-    return prefs.getString('user_phone');
+    String? phone = prefs.getString('user_phone');
+
+    // Additional check for empty or 'null' string
+    if (phone == null || phone.isEmpty || phone == 'null') {
+      return null;
+    }
+    return phone;
   }
 
   Future<void> setUserPhone(String phone) async {
@@ -157,7 +199,13 @@ class StorageService {
 
   Future<String?> getUserAddress() async {
     final prefs = await _getPrefs();
-    return prefs.getString('user_address');
+    String? address = prefs.getString('user_address');
+
+    // Additional check for empty or 'null' string
+    if (address == null || address.isEmpty || address == 'null') {
+      return null;
+    }
+    return address;
   }
 
   Future<void> setUserAddress(String address) async {
@@ -169,11 +217,16 @@ class StorageService {
   Future<String?> getUserId() async {
     try {
       final prefs = await _getPrefs();
-      String? id =
-          prefs.getString('user_id') ?? prefs.getInt('user_id')?.toString();
+      String? id = prefs.getString('user_id');
 
-      // If there's no stored user ID, return the fallback
-      if (id == null || id.isEmpty) {
+      // Try int value if string is null
+      if (id == null) {
+        int? intId = prefs.getInt('user_id');
+        id = intId?.toString();
+      }
+
+      // Check for 'null' string or empty string
+      if (id == null || id.isEmpty || id == 'null') {
         return _fallbackUserId;
       }
       return id;
@@ -201,8 +254,9 @@ class StorageService {
       final prefs = await _getPrefs();
       String? id = prefs.getString('current_user_id');
 
-      // If there's no current user ID, return the user ID or fallback
-      if (id == null || id.isEmpty) {
+      // Check for 'null' string or empty string
+      if (id == null || id.isEmpty || id == 'null') {
+        // If there's no current user ID, return the user ID or fallback
         id = await getUserId();
       }
       return id;
@@ -224,7 +278,13 @@ class StorageService {
   // Customer ID methods
   Future<int?> getCustomerId() async {
     final prefs = await _getPrefs();
-    return prefs.getInt('customer_id');
+    int? id = prefs.getInt('customer_id');
+
+    // Additional check for invalid values
+    if (id == 0) {
+      return null;
+    }
+    return id;
   }
 
   Future<void> setCustomerId(int customerId) async {
@@ -245,7 +305,13 @@ class StorageService {
 
   Future<String?> getLocalUserPassword() async {
     final prefs = await _getPrefs();
-    return prefs.getString('local_user_password');
+    String? password = prefs.getString('local_user_password');
+
+    // Additional check for empty or 'null' string
+    if (password == null || password.isEmpty || password == 'null') {
+      return null;
+    }
+    return password;
   }
 
   Future<void> setLocalUserPassword(String password) async {
@@ -280,7 +346,13 @@ class StorageService {
         return null;
       }
       final prefs = await _getPrefs();
-      return prefs.getString('user_${userId}_$key');
+      String? value = prefs.getString('user_${userId}_$key');
+
+      // Check for 'null' string or empty string
+      if (value == null || value.isEmpty || value == 'null') {
+        return null;
+      }
+      return value;
     } catch (e) {
       print("Error in getUserSpecificData: $e");
       return null;
@@ -295,7 +367,7 @@ class StorageService {
 
       // If userData contains a user_id, prioritize that
       final dataUserId = userData['user_id']?.toString();
-      if (dataUserId != null && dataUserId.isNotEmpty) {
+      if (dataUserId != null && dataUserId.isNotEmpty && dataUserId != 'null') {
         currentUserId = dataUserId;
         await setUserId(currentUserId);
         await setCurrentUserId(currentUserId);
@@ -304,53 +376,99 @@ class StorageService {
       // Now we should always have a user ID, so we can proceed without warning
 
       // Save all data to global keys
-      if (userData.containsKey('name') && userData['name'] != null) {
-        await setUserName(userData['name']);
-        await setUserSpecificData(currentUserId, 'name', userData['name']);
+      if (userData.containsKey('name') &&
+          userData['name'] != null &&
+          userData['name'] != 'null') {
+        await setUserName(userData['name'].toString());
+        await setUserSpecificData(
+          currentUserId,
+          'name',
+          userData['name'].toString(),
+        );
       }
 
-      if (userData.containsKey('email') && userData['email'] != null) {
-        await setUserEmail(userData['email']);
-        await setUserSpecificData(currentUserId, 'email', userData['email']);
+      if (userData.containsKey('email') &&
+          userData['email'] != null &&
+          userData['email'] != 'null') {
+        await setUserEmail(userData['email'].toString());
+        await setUserSpecificData(
+          currentUserId,
+          'email',
+          userData['email'].toString(),
+        );
       }
 
-      if (userData.containsKey('phone') && userData['phone'] != null) {
-        await setUserPhone(userData['phone']);
-        await setUserSpecificData(currentUserId, 'phone', userData['phone']);
+      if (userData.containsKey('phone') &&
+          userData['phone'] != null &&
+          userData['phone'] != 'null') {
+        await setUserPhone(userData['phone'].toString());
+        await setUserSpecificData(
+          currentUserId,
+          'phone',
+          userData['phone'].toString(),
+        );
       }
 
-      if (userData.containsKey('address') && userData['address'] != null) {
-        await setUserAddress(userData['address']);
+      if (userData.containsKey('address') &&
+          userData['address'] != null &&
+          userData['address'] != 'null') {
+        await setUserAddress(userData['address'].toString());
         await setUserSpecificData(
           currentUserId,
           'address',
-          userData['address'],
+          userData['address'].toString(),
         );
       }
 
       if (userData.containsKey('first_name') &&
-          userData['first_name'] != null) {
-        await setUserFirstName(userData['first_name']);
+          userData['first_name'] != null &&
+          userData['first_name'] != 'null') {
+        await setUserFirstName(userData['first_name'].toString());
         await setUserSpecificData(
           currentUserId,
           'first_name',
-          userData['first_name'],
+          userData['first_name'].toString(),
         );
       }
 
-      if (userData.containsKey('last_name') && userData['last_name'] != null) {
-        await setUserLastName(userData['last_name']);
+      if (userData.containsKey('last_name') &&
+          userData['last_name'] != null &&
+          userData['last_name'] != 'null') {
+        await setUserLastName(userData['last_name'].toString());
         await setUserSpecificData(
           currentUserId,
           'last_name',
-          userData['last_name'],
+          userData['last_name'].toString(),
         );
       }
 
       // If customer_id is in the data, make sure it's saved
       if (userData.containsKey('customer_id') &&
           userData['customer_id'] != null) {
-        await setCustomerId(userData['customer_id']);
+        int? customerId;
+
+        if (userData['customer_id'] is int) {
+          customerId = userData['customer_id'];
+        } else if (userData['customer_id'] is String) {
+          customerId = int.tryParse(userData['customer_id']);
+        }
+
+        if (customerId != null && customerId > 0) {
+          await setCustomerId(customerId);
+        }
+      }
+
+      // If auth_type is in the data, update local user status
+      if (userData.containsKey('auth_type') && userData['auth_type'] != null) {
+        bool isLocal = userData['auth_type'].toString() == 'local';
+        await setIsLocalUser(isLocal);
+      }
+
+      // Directly handle local_only flag if present
+      if (userData.containsKey('local_only') &&
+          userData['local_only'] != null) {
+        bool isLocal = userData['local_only'] == true;
+        await setIsLocalUser(isLocal);
       }
     } catch (e) {
       print("Error in updateUserData: $e");

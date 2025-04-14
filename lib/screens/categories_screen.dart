@@ -330,15 +330,11 @@ class _CategoriesScreenState extends State<CategoriesScreen>
 
     return Scaffold(
       appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
+        elevation: Theme.of(context).appBarTheme.elevation,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         title: Text(
           _viewingAllProducts ? selectedCategoryName : "Category",
-          style: TextStyle(
-            color: Colors.black87,
-            fontWeight: FontWeight.bold,
-            fontSize: _viewingAllProducts ? 22 : 28,
-          ),
+          style: Theme.of(context).appBarTheme.titleTextStyle,
         ),
         leading:
             _viewingAllProducts
@@ -357,7 +353,11 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                 : null,
         actions: [
           IconButton(
-            icon: Icon(Icons.search, color: Colors.grey[500], size: 28),
+            icon: Icon(
+              Icons.search,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+              size: 28,
+            ),
             onPressed: () {
               Navigator.push(
                 context,
@@ -375,8 +375,10 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                     return Transform.scale(
                       scale: 1.0 + _animationController.value * 0.3,
                       child: Icon(
-                        Icons.shopping_cart_outlined,
-                        color: Colors.grey[500],
+                        Icons.shopping_cart,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withOpacity(0.6),
                         size: 28,
                       ),
                     );
@@ -396,7 +398,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                   child: Container(
                     padding: EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: Colors.orange,
+                      color: Theme.of(context).colorScheme.primary,
                       shape: BoxShape.circle,
                     ),
                     constraints: BoxConstraints(minWidth: 18, minHeight: 18),
@@ -420,7 +422,9 @@ class _CategoriesScreenState extends State<CategoriesScreen>
           isLoading
               ? Center(
                 child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(context).colorScheme.primary,
+                  ),
                 ),
               )
               : _viewingAllProducts
@@ -883,7 +887,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                             ),
                           ),
                           child: Icon(
-                            Icons.shopping_cart_outlined,
+                            Icons.shopping_cart,
                             size: 18,
                             color: inStock ? Colors.black87 : Colors.grey[400],
                           ),

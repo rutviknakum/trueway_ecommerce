@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:trueway_ecommerce/screens/Checkout_Screens/ShippingScreen.dart';
+import 'package:trueway_ecommerce/utils/Theme_Config.dart';
+import 'package:trueway_ecommerce/widgets/Theme_Extensions.dart';
+import 'package:trueway_ecommerce/widgets/common_widgets.dart';
 
 class AddressScreen extends StatefulWidget {
   @override
@@ -21,26 +24,17 @@ class _AddressScreenState extends State<AddressScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.secondarySurfaceColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
         centerTitle: true,
-        title: Text(
-          "Checkout",
-          style: TextStyle(
-            color: Colors.black87,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: Text("Checkout", style: context.titleTextStyle),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black87),
+          icon: Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.close, color: Colors.black87),
+            icon: Icon(Icons.close),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -60,8 +54,12 @@ class _AddressScreenState extends State<AddressScreen> {
     return Container(
       padding: EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+        color: context.adaptiveCardColor,
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).dividerTheme.color ?? Colors.transparent,
+          ),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -104,13 +102,16 @@ class _AddressScreenState extends State<AddressScreen> {
           height: 30,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: isActive ? Colors.orange : Colors.grey[300],
+            color:
+                isActive
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
           ),
           child: Center(
             child: Text(
               number,
               style: TextStyle(
-                color: isActive ? Colors.white : Colors.grey,
+                color: isActive ? context.primaryButtonTextColor : Colors.grey,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -120,7 +121,8 @@ class _AddressScreenState extends State<AddressScreen> {
         Text(
           title,
           style: TextStyle(
-            color: isActive ? Colors.orange : Colors.grey,
+            color:
+                isActive ? Theme.of(context).colorScheme.primary : Colors.grey,
             fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
             fontSize: 12,
           ),
@@ -133,7 +135,10 @@ class _AddressScreenState extends State<AddressScreen> {
     return Container(
       width: 30,
       height: 2,
-      color: isActive ? Colors.orange : Colors.grey[300],
+      color:
+          isActive
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
     );
   }
 
@@ -145,18 +150,11 @@ class _AddressScreenState extends State<AddressScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              "Shipping Address",
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
+            CommonWidgets.buildHeaderText(context, "Shipping Address"),
             SizedBox(height: 8),
-            Text(
+            CommonWidgets.buildSubtitleText(
+              context,
               "Please enter your shipping details",
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
             SizedBox(height: 24),
 
@@ -283,25 +281,38 @@ class _AddressScreenState extends State<AddressScreen> {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: Icon(prefixIcon, color: Colors.grey[600]),
+        prefixIcon: Icon(
+          prefixIcon,
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderSide: BorderSide(
+            color: Theme.of(context).dividerTheme.color ?? Colors.transparent,
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderSide: BorderSide(
+            color: Theme.of(context).dividerTheme.color ?? Colors.transparent,
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.orange, width: 2),
+          borderSide: BorderSide(
+            color: Theme.of(context).colorScheme.primary,
+            width: 2,
+          ),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.red, width: 2),
+          borderSide: BorderSide(color: context.dangerColor, width: 2),
         ),
         filled: true,
-        fillColor: Colors.grey[50],
+        fillColor:
+            context.isDarkMode
+                ? Theme.of(context).inputDecorationTheme.fillColor
+                : Colors.grey[50],
         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
       style: TextStyle(fontSize: 16),
@@ -312,7 +323,7 @@ class _AddressScreenState extends State<AddressScreen> {
   Widget _buildBottomButtons(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.adaptiveCardColor,
         boxShadow: [
           BoxShadow(
             color: Colors.black12,
@@ -351,18 +362,12 @@ class _AddressScreenState extends State<AddressScreen> {
           child: Text(
             "CONTINUE TO SHIPPING",
             style: TextStyle(
-              color: Colors.white,
+              color: context.primaryButtonTextColor,
               fontWeight: FontWeight.bold,
               fontSize: 16,
             ),
           ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.orange,
-            padding: EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+          style: ThemeConfig.getPrimaryButtonStyle(),
         ),
       ),
     );

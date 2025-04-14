@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:trueway_ecommerce/providers/auth_provider.dart';
 import 'package:trueway_ecommerce/services/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:trueway_ecommerce/utils/Theme_Config.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -472,10 +473,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
-      child: Text(
-        title,
-        style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold),
-      ),
+      child: Text(title, style: Theme.of(context).textTheme.titleMedium),
     );
   }
 
@@ -535,11 +533,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Edit Profile',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-        ),
-        elevation: 0,
+        title: Text('Edit Profile'),
+        elevation: Theme.of(context).appBarTheme.elevation,
       ),
       body:
           _isLoading
@@ -603,10 +598,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 decoration: InputDecoration(
                                   hintText: 'Enter your full name',
                                   filled: true,
-                                  fillColor: Colors.grey[100],
+                                  fillColor:
+                                      Theme.of(
+                                        context,
+                                      ).inputDecorationTheme.fillColor,
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: BorderSide.none,
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide(
+                                      color: Theme.of(context).dividerColor,
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide(
+                                      color: Theme.of(context).dividerColor,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide(
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      width: 2,
+                                    ),
                                   ),
                                   contentPadding: EdgeInsets.symmetric(
                                     horizontal: 16,
@@ -636,12 +650,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 readOnly: true, // Email can't be changed
                                 enabled: false,
                                 decoration: InputDecoration(
-                                  hintText: 'Your email address',
+                                  hintText: 'Enter your Email',
                                   filled: true,
-                                  fillColor: Colors.grey[200],
+                                  fillColor:
+                                      Theme.of(
+                                        context,
+                                      ).inputDecorationTheme.fillColor,
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: BorderSide.none,
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide(
+                                      color: Theme.of(context).dividerColor,
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide(
+                                      color: Theme.of(context).dividerColor,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide(
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      width: 2,
+                                    ),
                                   ),
                                   contentPadding: EdgeInsets.symmetric(
                                     horizontal: 16,
@@ -664,12 +697,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 controller: _phoneController,
                                 keyboardType: TextInputType.phone,
                                 decoration: InputDecoration(
-                                  hintText: 'Enter your phone number',
+                                  hintText: 'Enter your Phone Number',
                                   filled: true,
-                                  fillColor: Colors.grey[100],
+                                  fillColor:
+                                      Theme.of(
+                                        context,
+                                      ).inputDecorationTheme.fillColor,
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: BorderSide.none,
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide(
+                                      color: Theme.of(context).dividerColor,
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide(
+                                      color: Theme.of(context).dividerColor,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide(
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      width: 2,
+                                    ),
                                   ),
                                   contentPadding: EdgeInsets.symmetric(
                                     horizontal: 16,
@@ -728,12 +780,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   TextFormField(
                                     controller: _streetController,
                                     decoration: InputDecoration(
-                                      hintText: 'Enter your street address',
+                                      hintText: 'Enter your full Address',
                                       filled: true,
-                                      fillColor: Colors.grey[100],
+                                      fillColor:
+                                          Theme.of(
+                                            context,
+                                          ).inputDecorationTheme.fillColor,
                                       border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                        borderSide: BorderSide.none,
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Theme.of(context).dividerColor,
+                                        ),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Theme.of(context).dividerColor,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                          width: 2,
+                                        ),
                                       ),
                                       contentPadding: EdgeInsets.symmetric(
                                         horizontal: 16,
@@ -763,12 +836,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   TextFormField(
                                     controller: _cityController,
                                     decoration: InputDecoration(
-                                      hintText: 'Enter your city',
+                                      hintText: 'Enter your City',
                                       filled: true,
-                                      fillColor: Colors.grey[100],
+                                      fillColor:
+                                          Theme.of(
+                                            context,
+                                          ).inputDecorationTheme.fillColor,
                                       border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                        borderSide: BorderSide.none,
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Theme.of(context).dividerColor,
+                                        ),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Theme.of(context).dividerColor,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                          width: 2,
+                                        ),
                                       ),
                                       contentPadding: EdgeInsets.symmetric(
                                         horizontal: 16,
@@ -805,14 +899,49 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                             TextFormField(
                                               controller: _stateController,
                                               decoration: InputDecoration(
-                                                hintText: 'State',
+                                                hintText: 'Enter your State',
                                                 filled: true,
-                                                fillColor: Colors.grey[100],
+                                                fillColor:
+                                                    Theme.of(context)
+                                                        .inputDecorationTheme
+                                                        .fillColor,
                                                 border: OutlineInputBorder(
                                                   borderRadius:
-                                                      BorderRadius.circular(10),
-                                                  borderSide: BorderSide.none,
+                                                      BorderRadius.circular(8),
+                                                  borderSide: BorderSide(
+                                                    color:
+                                                        Theme.of(
+                                                          context,
+                                                        ).dividerColor,
+                                                  ),
                                                 ),
+                                                enabledBorder:
+                                                    OutlineInputBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      borderSide: BorderSide(
+                                                        color:
+                                                            Theme.of(
+                                                              context,
+                                                            ).dividerColor,
+                                                      ),
+                                                    ),
+                                                focusedBorder:
+                                                    OutlineInputBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      borderSide: BorderSide(
+                                                        color:
+                                                            Theme.of(context)
+                                                                .colorScheme
+                                                                .primary,
+                                                        width: 2,
+                                                      ),
+                                                    ),
                                                 contentPadding:
                                                     EdgeInsets.symmetric(
                                                       horizontal: 16,
@@ -843,14 +972,50 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                               keyboardType:
                                                   TextInputType.number,
                                               decoration: InputDecoration(
-                                                hintText: 'Postal Code',
+                                                hintText:
+                                                    'Enter your Postal Code',
                                                 filled: true,
-                                                fillColor: Colors.grey[100],
+                                                fillColor:
+                                                    Theme.of(context)
+                                                        .inputDecorationTheme
+                                                        .fillColor,
                                                 border: OutlineInputBorder(
                                                   borderRadius:
-                                                      BorderRadius.circular(10),
-                                                  borderSide: BorderSide.none,
+                                                      BorderRadius.circular(8),
+                                                  borderSide: BorderSide(
+                                                    color:
+                                                        Theme.of(
+                                                          context,
+                                                        ).dividerColor,
+                                                  ),
                                                 ),
+                                                enabledBorder:
+                                                    OutlineInputBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      borderSide: BorderSide(
+                                                        color:
+                                                            Theme.of(
+                                                              context,
+                                                            ).dividerColor,
+                                                      ),
+                                                    ),
+                                                focusedBorder:
+                                                    OutlineInputBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      borderSide: BorderSide(
+                                                        color:
+                                                            Theme.of(context)
+                                                                .colorScheme
+                                                                .primary,
+                                                        width: 2,
+                                                      ),
+                                                    ),
                                                 contentPadding:
                                                     EdgeInsets.symmetric(
                                                       horizontal: 16,
@@ -877,12 +1042,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   TextFormField(
                                     controller: _countryController,
                                     decoration: InputDecoration(
-                                      hintText: 'Enter your country',
+                                      hintText: 'Enter your Country',
                                       filled: true,
-                                      fillColor: Colors.grey[100],
+                                      fillColor:
+                                          Theme.of(
+                                            context,
+                                          ).inputDecorationTheme.fillColor,
                                       border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                        borderSide: BorderSide.none,
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Theme.of(context).dividerColor,
+                                        ),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Theme.of(context).dividerColor,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                          width: 2,
+                                        ),
                                       ),
                                       contentPadding: EdgeInsets.symmetric(
                                         horizontal: 16,
@@ -914,15 +1100,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: _saveProfile,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            elevation: 2,
-                          ),
+                          style: ThemeConfig.getPrimaryButtonStyle(),
                           child: Text(
                             'Save Changes',
                             style: GoogleFonts.poppins(

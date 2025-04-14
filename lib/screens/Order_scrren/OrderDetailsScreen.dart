@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:trueway_ecommerce/widgets/Theme_Extensions.dart';
+import 'package:trueway_ecommerce/widgets/common_widgets.dart';
 
 class OrderDetailsScreen extends StatelessWidget {
   final dynamic order;
@@ -10,14 +12,10 @@ class OrderDetailsScreen extends StatelessWidget {
     List<dynamic> lineItems = order['line_items'] ?? [];
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: context.secondarySurfaceColor,
       appBar: AppBar(
-        title: Text(
-          "Order #${order['id']}",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: Text("Order #${order['id']}", style: context.titleTextStyle),
         centerTitle: true,
-        backgroundColor: Colors.green,
         elevation: 0,
       ),
       body: SingleChildScrollView(
@@ -25,42 +23,22 @@ class OrderDetailsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildStatusCard(),
+            _buildStatusCard(context),
             SizedBox(height: 16),
-            _buildOrderItems(lineItems),
+            _buildOrderItems(context, lineItems),
             SizedBox(height: 16),
-            _buildAddressCard(),
+            _buildAddressCard(context),
             SizedBox(height: 16),
-            _buildTotalCard(),
+            _buildTotalCard(context),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatusCard() {
+  Widget _buildStatusCard(BuildContext context) {
     String status = order['status'] ?? 'pending';
-    Color statusColor;
-
-    switch (status.toLowerCase()) {
-      case 'completed':
-        statusColor = Colors.green;
-        break;
-      case 'processing':
-        statusColor = Colors.orange;
-        break;
-      case 'on-hold':
-        statusColor = Colors.blue;
-        break;
-      case 'cancelled':
-        statusColor = Colors.red;
-        break;
-      case 'refunded':
-        statusColor = Colors.purple;
-        break;
-      default:
-        statusColor = Colors.grey;
-    }
+    _getStatusColor(context, status);
 
     String dateCreated = order['date_created'] ?? 'N/A';
     String formattedDate = _formatDate(dateCreated);
@@ -68,6 +46,7 @@ class OrderDetailsScreen extends StatelessWidget {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: context.adaptiveCardColor,
       child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
@@ -76,39 +55,22 @@ class OrderDetailsScreen extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  "Order Status",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: statusColor.withOpacity(0.5),
-                      width: 1,
-                    ),
-                  ),
-                  child: Text(
-                    status.toUpperCase(),
-                    style: TextStyle(
-                      color: statusColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
+                Text("Order Status", style: context.titleTextStyle),
+                CommonWidgets.buildStatusBadge(context, status),
               ],
             ),
             SizedBox(height: 12),
             Row(
               children: [
-                Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                Icon(
+                  Icons.calendar_today,
+                  size: 16,
+                  color: context.adaptiveSubtitleColor,
+                ),
                 SizedBox(width: 8),
                 Text(
                   "Order Date: $formattedDate",
-                  style: TextStyle(color: Colors.grey[700]),
+                  style: context.detailsTextStyle,
                 ),
               ],
             ),
@@ -118,12 +80,12 @@ class OrderDetailsScreen extends StatelessWidget {
                 Icon(
                   Icons.payments_outlined,
                   size: 16,
-                  color: Colors.grey[600],
+                  color: context.adaptiveSubtitleColor,
                 ),
                 SizedBox(width: 8),
                 Text(
                   "Payment Method: ${order['payment_method_title'] ?? 'N/A'}",
-                  style: TextStyle(color: Colors.grey[700]),
+                  style: context.detailsTextStyle,
                 ),
               ],
             ),
@@ -133,32 +95,35 @@ class OrderDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildOrderItems(List<dynamic> lineItems) {
+  Widget _buildOrderItems(BuildContext context, List<dynamic> lineItems) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: context.adaptiveCardColor,
       child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              "Order Items",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
+            Text("Order Items", style: context.titleTextStyle),
             SizedBox(height: 12),
             lineItems.isEmpty
                 ? Center(
                   child: Padding(
                     padding: EdgeInsets.all(16),
-                    child: Text("No items found in this order."),
+                    child: Text(
+                      "No items found in this order.",
+                      style: context.subtitleTextStyle,
+                    ),
                   ),
                 )
                 : ListView.separated(
                   shrinkWrap: true,
                   physics: NeverScrollableScrollPhysics(),
                   itemCount: lineItems.length,
-                  separatorBuilder: (context, index) => Divider(),
+                  separatorBuilder:
+                      (context, index) =>
+                          Divider(color: Theme.of(context).dividerTheme.color),
                   itemBuilder: (context, index) {
                     final item = lineItems[index];
                     final hasImage =
@@ -172,7 +137,11 @@ class OrderDetailsScreen extends StatelessWidget {
                           width: 70,
                           height: 70,
                           decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey[300]!),
+                            border: Border.all(
+                              color:
+                                  Theme.of(context).dividerTheme.color ??
+                                  Colors.transparent,
+                            ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child:
@@ -185,11 +154,15 @@ class OrderDetailsScreen extends StatelessWidget {
                                       errorBuilder:
                                           (context, error, stackTrace) => Icon(
                                             Icons.image_not_supported,
-                                            color: Colors.grey[400],
+                                            color:
+                                                context.adaptiveSubtitleColor,
                                           ),
                                     ),
                                   )
-                                  : Icon(Icons.image, color: Colors.grey[400]),
+                                  : Icon(
+                                    Icons.image,
+                                    color: context.adaptiveSubtitleColor,
+                                  ),
                         ),
                         SizedBox(width: 12),
 
@@ -205,18 +178,12 @@ class OrderDetailsScreen extends StatelessWidget {
                               SizedBox(height: 4),
                               Text(
                                 "Quantity: ${item['quantity'] ?? 1}",
-                                style: TextStyle(
-                                  color: Colors.grey[700],
-                                  fontSize: 13,
-                                ),
+                                style: context.detailsTextStyle,
                               ),
                               SizedBox(height: 4),
-                              Text(
-                                "₹${item['price'] ?? '0.00'}",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.green[700],
-                                ),
+                              CommonWidgets.buildPriceText(
+                                context,
+                                double.tryParse(item['price'].toString()) ?? 0,
                               ),
                             ],
                           ),
@@ -231,44 +198,49 @@ class OrderDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAddressCard() {
+  Widget _buildAddressCard(BuildContext context) {
     final billing = order['billing'] ?? {};
     final shipping = order['shipping'] ?? {};
 
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: context.adaptiveCardColor,
       child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              "Delivery Address",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
+            Text("Delivery Address", style: context.titleTextStyle),
             SizedBox(height: 12),
             Text(
               "${shipping['first_name'] ?? ''} ${shipping['last_name'] ?? ''}",
               style: TextStyle(fontWeight: FontWeight.w500),
             ),
             SizedBox(height: 4),
-            Text(shipping['address_1'] ?? ''),
+            Text(shipping['address_1'] ?? '', style: context.detailsTextStyle),
             if (shipping['address_2'] != null &&
                 shipping['address_2'].toString().isNotEmpty)
-              Text(shipping['address_2']),
+              Text(shipping['address_2'], style: context.detailsTextStyle),
             Text(
               "${shipping['city'] ?? ''}, ${shipping['state'] ?? ''} ${shipping['postcode'] ?? ''}",
+              style: context.detailsTextStyle,
             ),
-            Text(shipping['country'] ?? ''),
+            Text(shipping['country'] ?? '', style: context.detailsTextStyle),
             SizedBox(height: 4),
-            Text("Phone: ${shipping['phone'] ?? 'N/A'}"),
+            Text(
+              "Phone: ${shipping['phone'] ?? 'N/A'}",
+              style: context.detailsTextStyle,
+            ),
 
             // Show billing email if available
             if (billing['email'] != null &&
                 billing['email'].toString().isNotEmpty) ...[
               SizedBox(height: 4),
-              Text("Email: ${billing['email']}"),
+              Text(
+                "Email: ${billing['email']}",
+                style: context.detailsTextStyle,
+              ),
             ],
           ],
         ),
@@ -276,38 +248,49 @@ class OrderDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTotalCard() {
+  Widget _buildTotalCard(BuildContext context) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: context.adaptiveCardColor,
       child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              "Order Summary",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
+            Text("Order Summary", style: context.titleTextStyle),
             SizedBox(height: 12),
-            _buildPriceRow("Subtotal", "₹${order['discount_total'] ?? '0.00'}"),
             _buildPriceRow(
+              context,
+              "Subtotal",
+              "₹${order['subtotal'] ?? '0.00'}",
+            ),
+            _buildPriceRow(
+              context,
               "Discount",
               "-₹${order['discount_total'] ?? '0.00'}",
             ),
             _buildPriceRow(
+              context,
               "Shipping",
               order['shipping_total'] != null &&
                       order['shipping_total'] != '0.00'
                   ? "₹${order['shipping_total']}"
                   : "FREE",
+              valueColor:
+                  order['shipping_total'] != null &&
+                          order['shipping_total'] != '0.00'
+                      ? null
+                      : context.successColor,
             ),
-            _buildPriceRow("Tax", "₹${order['total_tax'] ?? '0.00'}"),
-            Divider(height: 24),
+            _buildPriceRow(context, "Tax", "₹${order['total_tax'] ?? '0.00'}"),
+            Divider(height: 24, color: Theme.of(context).dividerTheme.color),
             _buildPriceRow(
+              context,
               "Total",
               "₹${order['total'] ?? '0.00'}",
               isBold: true,
+              valueColor: context.priceColor,
             ),
           ],
         ),
@@ -315,7 +298,13 @@ class OrderDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPriceRow(String label, String value, {bool isBold = false}) {
+  Widget _buildPriceRow(
+    BuildContext context,
+    String label,
+    String value, {
+    bool isBold = false,
+    Color? valueColor,
+  }) {
     return Padding(
       padding: EdgeInsets.only(bottom: 8),
       child: Row(
@@ -323,21 +312,36 @@ class OrderDetailsScreen extends StatelessWidget {
         children: [
           Text(
             label,
-            style: TextStyle(
-              color: isBold ? Colors.black87 : Colors.grey[700],
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-            ),
+            style: isBold ? context.titleTextStyle : context.detailsTextStyle,
           ),
           Text(
             value,
             style: TextStyle(
               fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-              color: isBold ? Colors.green[700] : Colors.black87,
+              color: valueColor ?? (isBold ? context.priceColor : null),
             ),
           ),
         ],
       ),
     );
+  }
+
+  // Helper method to get status color with theme support
+  Color _getStatusColor(BuildContext context, String status) {
+    switch (status.toLowerCase()) {
+      case 'completed':
+        return context.successColor;
+      case 'processing':
+        return Colors.orange;
+      case 'on-hold':
+        return Colors.blue;
+      case 'cancelled':
+        return context.dangerColor;
+      case 'refunded':
+        return Colors.purple;
+      default:
+        return Colors.grey;
+    }
   }
 
   // Helper method to format date

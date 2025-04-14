@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:trueway_ecommerce/services/search_service.dart';
+import 'package:trueway_ecommerce/widgets/Theme_Extensions.dart';
 
 class ProductCard_Search extends StatelessWidget {
   final dynamic product;
@@ -25,6 +26,7 @@ class ProductCard_Search extends StatelessWidget {
       child: Card(
         margin: const EdgeInsets.symmetric(vertical: 8),
         elevation: 4,
+        color: context.adaptiveCardColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -52,10 +54,7 @@ class ProductCard_Search extends StatelessWidget {
                     // Product name
                     Text(
                       product['name'] ?? "No Name",
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: context.titleTextStyle,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -67,9 +66,9 @@ class ProductCard_Search extends StatelessWidget {
                         if (hasDiscount) ...[
                           Text(
                             "₹$regularPrice",
-                            style: const TextStyle(
+                            style: TextStyle(
                               decoration: TextDecoration.lineThrough,
-                              color: Colors.grey,
+                              color: context.adaptiveSubtitleColor,
                               fontSize: 14,
                             ),
                           ),
@@ -80,7 +79,7 @@ class ProductCard_Search extends StatelessWidget {
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
-                            color: hasDiscount ? Colors.green : Colors.black,
+                            color: hasDiscount ? context.priceColor : null,
                           ),
                         ),
                       ],
@@ -95,13 +94,13 @@ class ProductCard_Search extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.red,
+                          color: context.discountBadgeColor,
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text(
+                        child: Text(
                           "SALE",
                           style: TextStyle(
-                            color: Colors.white,
+                            color: context.primaryButtonTextColor,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                           ),

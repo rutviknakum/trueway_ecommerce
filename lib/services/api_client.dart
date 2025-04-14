@@ -1,4 +1,5 @@
 // api_client.dart - Handles HTTP requests
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
@@ -17,9 +18,11 @@ class ApiClient {
 
     try {
       // Add token or basic auth if provided
-      if (authToken != null) {
+      if (authToken != null && authToken.isNotEmpty && authToken != 'null') {
         headers["Authorization"] = "Bearer $authToken";
-      } else if (basicAuth != null) {
+      } else if (basicAuth != null &&
+          basicAuth.isNotEmpty &&
+          basicAuth != 'null') {
         headers["Authorization"] = basicAuth;
       }
 
@@ -29,11 +32,14 @@ class ApiClient {
         final String consumerSecret = ApiConfig.consumerSecret;
 
         if (consumerKey.isNotEmpty && consumerSecret.isNotEmpty) {
-          // Override existing Authorization with WooCommerce credentials
-          String credentials = base64Encode(
-            utf8.encode('$consumerKey:$consumerSecret'),
-          );
-          headers['Authorization'] = 'Basic $credentials';
+          // If we don't have token auth already, add WooCommerce credentials
+          if (!headers.containsKey("Authorization") ||
+              headers["Authorization"]!.isEmpty) {
+            String credentials = base64Encode(
+              utf8.encode('$consumerKey:$consumerSecret'),
+            );
+            headers['Authorization'] = 'Basic $credentials';
+          }
 
           // Debug
           print("Using WooCommerce API authentication");
@@ -89,6 +95,7 @@ class ApiClient {
 
     // Add customer ID to query if applicable
     if (customerId != null &&
+        customerId > 0 &&
         !endpoint.contains("customer=") &&
         !endpoint.contains("/customers/") &&
         method.toUpperCase() == 'GET') {
@@ -150,6 +157,8 @@ class ApiClient {
 
       // Debug response
       print("Response status: ${response.statusCode}");
+
+      // Don't log the entire response body for successful responses to avoid console spam
       if (response.statusCode >= 400) {
         print("Error response body: ${response.body}");
 
@@ -183,11 +192,15 @@ class ApiClient {
             // Remove Authorization header and use query params instead
             headers.remove('Authorization');
 
-            // Add consumer key and secret to URL
-            String separator = url.toString().contains("?") ? "&" : "?";
-            final newUrl = Uri.parse(
-              "${url}${separator}consumer_key=${ApiConfig.consumerKey}&consumer_secret=${ApiConfig.consumerSecret}",
-            );
+            // Add consumer key and secret to URL if not already present
+            String newUrlString = urlString;
+            if (!newUrlString.contains("consumer_key=")) {
+              String separator = newUrlString.contains("?") ? "&" : "?";
+              newUrlString =
+                  "$newUrlString${separator}consumer_key=${ApiConfig.consumerKey}&consumer_secret=${ApiConfig.consumerSecret}";
+            }
+
+            final newUrl = Uri.parse(newUrlString);
 
             print("Retrying with query parameter authentication: $newUrl");
 
@@ -227,46 +240,103 @@ class ApiClient {
       return response;
     } catch (e) {
       print("Error in authenticated request: $e");
+
+      // Return a mock response for timeouts and errors rather than throwing
+      // This prevents app crashes and allows graceful handling
+      if (e is http.ClientException || e is TimeoutException) {
+        print("Network error or timeout - returning mock error response");
+        return http.Response(
+          jsonEncode({
+            "error": true,
+            "message": "Network error or timeout occurred",
+            "exception": e.toString(),
+          }),
+          503, // Service Unavailable
+          headers: {"content-type": "application/json"},
+        );
+      }
+
+      // For other exceptions, rethrow to maintain compatibility with existing code
       rethrow;
     }
   }
 
-  // Public request method
+  // Public request method - CORRECTED VERSION
   Future<http.Response> publicRequest(
     String endpoint, {
     required String method,
     dynamic body,
     Map<String, dynamic>? queryParams,
   }) async {
-    final url = Uri.parse(
-      ApiConfig.buildUrlWithoutAuth(endpoint, queryParams: queryParams),
-    );
+    // Determine if this is a WooCommerce API endpoint
+    bool isWooCommerceEndpoint = ApiConfig.isWooCommerceEndpoint(endpoint);
+
+    // Build URL with appropriate authentication
+    String urlString;
+    if (isWooCommerceEndpoint) {
+      // For WooCommerce endpoints, include auth
+      urlString =
+          queryParams != null
+              ? ApiConfig.buildUrl(endpoint, queryParams: queryParams)
+              : ApiConfig.buildUrl(endpoint);
+    } else {
+      // For other endpoints, don't include auth
+      urlString =
+          queryParams != null
+              ? ApiConfig.buildUrlWithoutAuth(
+                endpoint,
+                queryParams: queryParams,
+              )
+              : ApiConfig.buildUrlWithoutAuth(endpoint);
+    }
+
+    final url = Uri.parse(urlString);
 
     try {
+      // Create headers with content type
+      Map<String, String> headers = {"Content-Type": "application/json"};
+
+      // Debug information
+      print("Sending ${method.toUpperCase()} public request to: $url");
+      print("Headers: $headers");
+
       switch (method.toUpperCase()) {
         case 'GET':
-          return await http.get(url);
+          return await http.get(url, headers: headers);
         case 'POST':
-          Map<String, String> headers = {"Content-Type": "application/json"};
           return await http.post(
             url,
             headers: headers,
             body: body != null ? jsonEncode(body) : null,
           );
         case 'PUT':
-          Map<String, String> headers = {"Content-Type": "application/json"};
           return await http.put(
             url,
             headers: headers,
             body: body != null ? jsonEncode(body) : null,
           );
         case 'DELETE':
-          return await http.delete(url);
+          return await http.delete(url, headers: headers);
         default:
           throw Exception("Unsupported HTTP method: $method");
       }
     } catch (e) {
       print("Error in public request: $e");
+
+      // Return a mock response for timeouts and errors rather than throwing
+      if (e is http.ClientException || e is TimeoutException) {
+        print("Network error or timeout - returning mock error response");
+        return http.Response(
+          jsonEncode({
+            "error": true,
+            "message": "Network error or timeout occurred",
+            "exception": e.toString(),
+          }),
+          503, // Service Unavailable
+          headers: {"content-type": "application/json"},
+        );
+      }
+
       rethrow;
     }
   }

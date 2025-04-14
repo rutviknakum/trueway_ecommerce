@@ -21,8 +21,15 @@ extension ApiProfileService on ApiService {
       final name = prefs.getString("user_name");
 
       // Get IDs and store as strings to avoid type issues
-      final userId = prefs.getInt("user_id")?.toString();
+      final userId =
+          prefs.getString("user_id") ?? prefs.getInt("user_id")?.toString();
       final customerId = prefs.getInt("customer_id")?.toString();
+
+      // Debug information
+      print("DEBUG - getUserProfile - email: $email");
+      print("DEBUG - getUserProfile - name: $name");
+      print("DEBUG - getUserProfile - userId: $userId");
+      print("DEBUG - getUserProfile - customerId: $customerId");
 
       Map<String, dynamic> userData = {
         'email': email,
@@ -31,6 +38,9 @@ extension ApiProfileService on ApiService {
         'customer_id': customerId,
       };
 
+      // IMPORTANT: Don't clear auth token or auth state!
+      // We're just retrieving profile data here.
+
       // If we have a customer ID, try to get more details from WooCommerce
       if (customerId != null) {
         try {
@@ -38,7 +48,7 @@ extension ApiProfileService on ApiService {
             ApiConfig.buildUrl("${ApiConfig.customersEndpoint}/$customerId"),
           );
 
-          final headers = await getAuthHeaders();
+          final headers = await getAuthHeaders(includeWooAuth: true);
           final response = await http.get(url, headers: headers);
 
           if (response.statusCode == 200) {
@@ -67,6 +77,12 @@ extension ApiProfileService on ApiService {
               // Update stored name if we got a better one from the API
               await prefs.setString("user_name", fullName);
             }
+          } else if (response.statusCode == 401 || response.statusCode == 403) {
+            // Authentication failure when getting customer details
+            // This doesn't mean we should log the user out - just continue with basic data
+            print(
+              "Authentication issue when fetching customer details: ${response.statusCode}",
+            );
           }
         } catch (e) {
           print("Error fetching customer details: $e");
@@ -98,6 +114,12 @@ extension ApiProfileService on ApiService {
                 userData['address'] = wpUserData['meta']['address'];
               }
             }
+          } else if (response.statusCode == 401 || response.statusCode == 403) {
+            // Authentication failure when getting WordPress user details
+            // This doesn't mean we should log the user out - just continue with basic data
+            print(
+              "Authentication issue when fetching WordPress user details: ${response.statusCode}",
+            );
           }
         } catch (e) {
           print("Error fetching WordPress user details: $e");
@@ -141,6 +163,9 @@ extension ApiProfileService on ApiService {
       if (userData['address'] != null) {
         await prefs.setString("user_address", userData['address']);
       }
+
+      // IMPORTANT: Don't clear auth token or auth state!
+      // We're just updating profile data here.
 
       // If we have a customer ID, update WooCommerce customer data
       if (customerId != null) {
@@ -225,7 +250,8 @@ extension ApiProfileService on ApiService {
             print("Response body: ${response.body}");
 
             // If we got a 403, try the WordPress user update method as fallback
-            if (response.statusCode == 403 && userId != null) {
+            if ((response.statusCode == 403 || response.statusCode == 401) &&
+                userId != null) {
               print("Falling back to WordPress user update");
               return await _updateWordPressUser(userId, userData);
             }

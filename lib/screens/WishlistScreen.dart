@@ -4,6 +4,9 @@ import 'package:trueway_ecommerce/providers/wishlist_provider.dart';
 import 'package:trueway_ecommerce/providers/cart_provider.dart';
 import 'package:trueway_ecommerce/screens/SearchScreen.dart';
 import 'package:trueway_ecommerce/screens/main_screen.dart';
+import 'package:trueway_ecommerce/widgets/Theme_Extensions.dart';
+import 'package:trueway_ecommerce/utils/Theme_Config.dart';
+import 'package:trueway_ecommerce/widgets/common_widgets.dart';
 
 class WishlistScreen extends StatelessWidget {
   @override
@@ -11,16 +14,12 @@ class WishlistScreen extends StatelessWidget {
     final wishlistProvider = Provider.of<WishlistProvider>(context);
     final cartProvider = Provider.of<CartProvider>(context);
     final wishlist = wishlistProvider.wishlist; // Get wishlist items
+    // final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          "My Wishlist",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
-        ),
+        title: CommonWidgets.buildHeaderText(context, "My Wishlist"),
         elevation: 0,
-        //  backgroundColor: Colors.white,
-        //foregroundColor: Colors.black,
       ),
       body:
           wishlist.isEmpty
@@ -33,6 +32,7 @@ class WishlistScreen extends StatelessWidget {
                   return Card(
                     margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     elevation: 3,
+                    color: context.adaptiveCardColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -43,16 +43,45 @@ class WishlistScreen extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              Image.network(
-                                product.image ??
-                                    'https://via.placeholder.com/150',
+                              Container(
                                 width: 70,
                                 height: 70,
-                                errorBuilder:
-                                    (context, error, stackTrace) => Icon(
-                                      Icons.image_not_supported,
-                                      size: 50,
-                                    ),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color:
+                                        Theme.of(context).dividerTheme.color ??
+                                        Colors.transparent,
+                                  ),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child:
+                                      product.image != null &&
+                                              product.image!.isNotEmpty
+                                          ? Image.network(
+                                            product.image ?? '',
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (
+                                                  context,
+                                                  error,
+                                                  stackTrace,
+                                                ) => Icon(
+                                                  Icons.image_not_supported,
+                                                  size: 30,
+                                                  color:
+                                                      context
+                                                          .adaptiveSubtitleColor,
+                                                ),
+                                          )
+                                          : Icon(
+                                            Icons.image_not_supported,
+                                            size: 30,
+                                            color:
+                                                context.adaptiveSubtitleColor,
+                                          ),
+                                ),
                               ),
                               SizedBox(width: 10),
                               Expanded(
@@ -61,21 +90,14 @@ class WishlistScreen extends StatelessWidget {
                                   children: [
                                     Text(
                                       product.name,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
+                                      style: context.titleTextStyle,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     SizedBox(height: 5),
-                                    Text(
-                                      "₹${product.price}",
-                                      style: TextStyle(
-                                        color: Colors.green,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
+                                    CommonWidgets.buildPriceText(
+                                      context,
+                                      product.price,
                                     ),
                                   ],
                                 ),
@@ -88,7 +110,10 @@ class WishlistScreen extends StatelessWidget {
                             children: [
                               /// **Remove from Wishlist**
                               IconButton(
-                                icon: Icon(Icons.delete, color: Colors.red),
+                                icon: Icon(
+                                  Icons.delete,
+                                  color: context.dangerColor,
+                                ),
                                 onPressed: () {
                                   wishlistProvider.removeFromWishlist(
                                     product.id,
@@ -126,9 +151,7 @@ class WishlistScreen extends StatelessWidget {
                                 },
                                 icon: Icon(Icons.add_shopping_cart, size: 24),
                                 label: Text("Add to Cart"),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.orange,
-                                ),
+                                style: ThemeConfig.getAddToCartButtonStyle(),
                               ),
                             ],
                           ),
@@ -143,6 +166,9 @@ class WishlistScreen extends StatelessWidget {
 
   /// Builds the empty wishlist UI as shown in the reference image
   Widget _buildEmptyWishlist(BuildContext context) {
+    // final colorScheme = Theme.of(context).colorScheme;
+    //  final textTheme = Theme.of(context).textTheme;
+
     return Padding(
       padding: EdgeInsets.all(20),
       child: Column(
@@ -157,7 +183,7 @@ class WishlistScreen extends StatelessWidget {
                 // Main heart
                 Icon(
                   Icons.favorite,
-                  color: Color(0xFF8CD28C), // Light green color
+                  color: context.successColor.withOpacity(0.8),
                   size: 120,
                 ),
                 // Small heart bottom right
@@ -166,7 +192,7 @@ class WishlistScreen extends StatelessWidget {
                   right: 120,
                   child: Icon(
                     Icons.favorite,
-                    color: Color(0xFFDCF9DC), // Very light green
+                    color: context.successColor.withOpacity(0.4),
                     size: 40,
                   ),
                 ),
@@ -176,7 +202,7 @@ class WishlistScreen extends StatelessWidget {
                   right: 80,
                   child: Icon(
                     Icons.favorite,
-                    color: Color(0xFFDCF9DC), // Very light green
+                    color: context.successColor.withOpacity(0.4),
                     size: 20,
                   ),
                 ),
@@ -185,54 +211,27 @@ class WishlistScreen extends StatelessWidget {
           ),
           SizedBox(height: 20),
           // No favorites text
-          Text(
-            "No favorites yet.",
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
-          ),
+          CommonWidgets.buildHeaderText(context, "No favorites yet."),
           SizedBox(height: 15),
           // Instruction text
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 20),
-            child: Text(
+            child: CommonWidgets.buildSubtitleText(
+              context,
               "Tap any heart next to a product to favorite. We'll save them for you here!",
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 18,
-                color: Colors.black54,
-                height: 1.3,
-              ),
             ),
           ),
           SizedBox(height: 50),
           // Shop now button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                // Navigate to shop/product listing page
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => MainScreen()),
-                ); // Return to previous screen to simulate going to shop
-              },
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 15),
-                child: Text(
-                  "SHOP NOW",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFFF5B041), // Orange color
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
+          CommonWidgets.buildPrimaryButton(
+            context: context,
+            text: "SHOP NOW",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => MainScreen()),
+              );
+            },
           ),
           SizedBox(height: 20),
           // Search for items button
@@ -249,12 +248,18 @@ class WishlistScreen extends StatelessWidget {
                 padding: EdgeInsets.symmetric(vertical: 15),
                 child: Text(
                   "SEARCH FOR ITEMS",
-                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: context.adaptiveSubtitleColor,
+                  ),
                 ),
               ),
               style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Colors.grey[300]!),
-                backgroundColor: Colors.grey[200],
+                side: BorderSide(
+                  color:
+                      Theme.of(context).dividerTheme.color ?? Colors.grey[300]!,
+                ),
+                backgroundColor: context.secondarySurfaceColor,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),

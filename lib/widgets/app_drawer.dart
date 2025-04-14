@@ -67,7 +67,7 @@ class _AppDrawerState extends State<AppDrawer> {
     final currentRoute = ModalRoute.of(context)?.settings.name;
     final effectiveRoute = currentRoute ?? AppRoutes.main;
 
-    // Define drawer items
+    // Define drawer items with consistent icon size
     List<Map<String, dynamic>> menuItems = [
       {'title': 'Home', 'route': AppRoutes.home, 'icon': Icons.home_outlined},
       {
@@ -235,7 +235,12 @@ class _AppDrawerState extends State<AppDrawer> {
             backgroundColor: colorScheme.primary.withOpacity(0.2),
             child:
                 _isLoading
-                    ? CircularProgressIndicator(strokeWidth: 2)
+                    ? CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        colorScheme.primary,
+                      ),
+                    )
                     : Text(
                       _userName.isNotEmpty ? _userName[0].toUpperCase() : 'G',
                       style: TextStyle(
@@ -253,14 +258,20 @@ class _AppDrawerState extends State<AppDrawer> {
               children: [
                 Text(
                   _userName,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 SizedBox(height: 4),
                 Text(
                   _userEmail.isNotEmpty ? _userEmail : 'Welcome',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withOpacity(0.6),
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -302,11 +313,17 @@ class _AppDrawerState extends State<AppDrawer> {
   }) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    // Consistent icon size of 22
+    const double iconSize = 22;
+
     return ListTile(
       leading: Icon(
         icon,
-        color: isSelected ? colorScheme.primary : null,
-        size: 22,
+        color:
+            isSelected
+                ? colorScheme.primary
+                : colorScheme.onSurface.withOpacity(0.7),
+        size: iconSize,
       ),
       title: Text(
         title,
@@ -317,7 +334,11 @@ class _AppDrawerState extends State<AppDrawer> {
       ),
       trailing:
           showTrailing
-              ? Icon(Icons.chevron_right, size: 16, color: Colors.grey[400])
+              ? Icon(
+                Icons.chevron_right,
+                size: 16,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+              )
               : null,
       selected: isSelected,
       selectedTileColor: colorScheme.primary.withOpacity(0.1),
@@ -372,6 +393,8 @@ class _AppDrawerState extends State<AppDrawer> {
 
   // Handle sign out action
   void _handleSignOut(BuildContext context) async {
+    //final colorScheme = Theme.of(context).colorScheme;
+
     final shouldSignOut = await showDialog<bool>(
       context: context,
       builder:

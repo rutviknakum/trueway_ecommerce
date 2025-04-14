@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:trueway_ecommerce/services/search_service.dart';
+import 'package:trueway_ecommerce/widgets/Theme_Extensions.dart';
 
 class ProductGridItem_search extends StatelessWidget {
   final dynamic product;
@@ -24,6 +25,7 @@ class ProductGridItem_search extends StatelessWidget {
       onTap: onTap,
       child: Card(
         elevation: 3,
+        color: context.adaptiveCardColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -50,10 +52,7 @@ class ProductGridItem_search extends StatelessWidget {
                   // Product name
                   Text(
                     product['name'] ?? "No Name",
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: context.titleTextStyle.copyWith(fontSize: 14),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -66,9 +65,9 @@ class ProductGridItem_search extends StatelessWidget {
                         Expanded(
                           child: Text(
                             "₹$regularPrice",
-                            style: const TextStyle(
+                            style: TextStyle(
                               decoration: TextDecoration.lineThrough,
-                              color: Colors.grey,
+                              color: context.adaptiveSubtitleColor,
                               fontSize: 12,
                             ),
                           ),
@@ -79,7 +78,7 @@ class ProductGridItem_search extends StatelessWidget {
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
-                          color: hasDiscount ? Colors.green : Colors.black,
+                          color: hasDiscount ? context.priceColor : null,
                         ),
                       ),
                     ],
@@ -94,13 +93,13 @@ class ProductGridItem_search extends StatelessWidget {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.red,
+                        color: context.discountBadgeColor,
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text(
+                      child: Text(
                         "SALE",
                         style: TextStyle(
-                          color: Colors.white,
+                          color: context.primaryButtonTextColor,
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                         ),

@@ -310,7 +310,7 @@ class ThemeConfig {
       backgroundColor: primaryButtonColor,
       foregroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 100, vertical: 12),
     );
   }
 

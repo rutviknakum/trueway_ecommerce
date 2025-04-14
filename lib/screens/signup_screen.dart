@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:trueway_ecommerce/screens/login_screen.dart';
 import 'package:trueway_ecommerce/screens/main_screen.dart';
 import 'package:trueway_ecommerce/services/api_service.dart';
+import 'package:trueway_ecommerce/utils/Theme_Config.dart';
 
 class SignupScreen extends StatefulWidget {
   @override
@@ -191,8 +192,31 @@ class _SignupScreenState extends State<SignupScreen> {
                     decoration: InputDecoration(
                       labelText: "First Name",
                       prefixIcon: Icon(Icons.person),
+                      filled: true,
+                      fillColor:
+                          Theme.of(context).inputDecorationTheme.fillColor,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: EdgeInsets.symmetric(
+                        vertical: 15,
+                        horizontal: 15,
                       ),
                     ),
                     validator: (value) {
@@ -210,8 +234,31 @@ class _SignupScreenState extends State<SignupScreen> {
                     decoration: InputDecoration(
                       labelText: "Last Name",
                       prefixIcon: Icon(Icons.person_outline),
+                      filled: true,
+                      fillColor:
+                          Theme.of(context).inputDecorationTheme.fillColor,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: EdgeInsets.symmetric(
+                        vertical: 15,
+                        horizontal: 15,
                       ),
                     ),
                     validator: (value) {
@@ -229,9 +276,32 @@ class _SignupScreenState extends State<SignupScreen> {
                     keyboardType: TextInputType.phone,
                     decoration: InputDecoration(
                       labelText: "Mobile Number",
-                      prefixIcon: Icon(Icons.phone_android),
+                      prefixIcon: Icon(Icons.phone_iphone),
+                      filled: true,
+                      fillColor:
+                          Theme.of(context).inputDecorationTheme.fillColor,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: EdgeInsets.symmetric(
+                        vertical: 15,
+                        horizontal: 15,
                       ),
                     ),
                     validator: (value) {
@@ -252,8 +322,31 @@ class _SignupScreenState extends State<SignupScreen> {
                     decoration: InputDecoration(
                       labelText: "Email",
                       prefixIcon: Icon(Icons.email),
+                      filled: true,
+                      fillColor:
+                          Theme.of(context).inputDecorationTheme.fillColor,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: EdgeInsets.symmetric(
+                        vertical: 15,
+                        horizontal: 15,
                       ),
                     ),
                     validator: (value) {
@@ -286,8 +379,31 @@ class _SignupScreenState extends State<SignupScreen> {
                           });
                         },
                       ),
+                      filled: true,
+                      fillColor:
+                          Theme.of(context).inputDecorationTheme.fillColor,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: EdgeInsets.symmetric(
+                        vertical: 15,
+                        horizontal: 15,
                       ),
                     ),
                     validator: (value) {
@@ -307,6 +423,25 @@ class _SignupScreenState extends State<SignupScreen> {
                   TextFormField(
                     controller: confirmPasswordController,
                     obscureText: _obscureConfirmPassword,
+                    // decoration: InputDecoration(
+                    //   labelText: "Confirm Password",
+                    //   prefixIcon: Icon(Icons.lock_outline),
+                    //   suffixIcon: IconButton(
+                    //     icon: Icon(
+                    //       _obscureConfirmPassword
+                    //           ? Icons.visibility
+                    //           : Icons.visibility_off,
+                    //     ),
+                    //     onPressed: () {
+                    //       setState(() {
+                    //         _obscureConfirmPassword = !_obscureConfirmPassword;
+                    //       });
+                    //     },
+                    //   ),
+                    //   border: OutlineInputBorder(
+                    //     borderRadius: BorderRadius.circular(10),
+                    //   ),
+                    // ),
                     decoration: InputDecoration(
                       labelText: "Confirm Password",
                       prefixIcon: Icon(Icons.lock_outline),
@@ -322,8 +457,31 @@ class _SignupScreenState extends State<SignupScreen> {
                           });
                         },
                       ),
+                      filled: true,
+                      fillColor:
+                          Theme.of(context).inputDecorationTheme.fillColor,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: EdgeInsets.symmetric(
+                        vertical: 15,
+                        horizontal: 15,
                       ),
                     ),
                     validator: (value) {
@@ -345,17 +503,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       ? CircularProgressIndicator()
                       : ElevatedButton(
                         onPressed: _signup,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(
-                            vertical: 12,
-                            horizontal: 80,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
+                        style: ThemeConfig.getPrimaryButtonStyle(),
                         child: Text(
                           "Sign Up",
                           style: GoogleFonts.poppins(fontSize: 18),

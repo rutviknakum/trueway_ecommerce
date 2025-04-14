@@ -3,6 +3,7 @@ import 'package:trueway_ecommerce/screens/main_screen.dart';
 import 'package:trueway_ecommerce/screens/signup_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:trueway_ecommerce/services/api_service.dart';
+import 'package:trueway_ecommerce/utils/Theme_Config.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -118,9 +119,28 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: InputDecoration(
                       labelText: "Email",
                       prefixIcon: Icon(Icons.email),
-                      border: InputBorder.none,
                       filled: true,
-                      fillColor: Colors.grey[100],
+                      fillColor:
+                          Theme.of(context).inputDecorationTheme.fillColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
                       contentPadding: EdgeInsets.symmetric(
                         vertical: 15,
                         horizontal: 15,
@@ -137,6 +157,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextFormField(
                     controller: passwordController,
                     obscureText: _obscureText,
+
                     decoration: InputDecoration(
                       labelText: "Password",
                       prefixIcon: Icon(Icons.lock),
@@ -152,9 +173,28 @@ class _LoginScreenState extends State<LoginScreen> {
                           });
                         },
                       ),
-                      border: InputBorder.none,
                       filled: true,
-                      fillColor: Colors.grey[100],
+                      fillColor:
+                          Theme.of(context).inputDecorationTheme.fillColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
                       contentPadding: EdgeInsets.symmetric(
                         vertical: 15,
                         horizontal: 15,
@@ -175,17 +215,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ? CircularProgressIndicator()
                       : ElevatedButton(
                         onPressed: _login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(
-                            vertical: 12,
-                            horizontal: 100,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
+                        style: ThemeConfig.getPrimaryButtonStyle(),
                         child: Text(
                           "Login",
                           style: GoogleFonts.poppins(fontSize: 18),

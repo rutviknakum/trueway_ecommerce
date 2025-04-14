@@ -168,7 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Container(
                     padding: EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: Colors.red,
+                      color: Theme.of(context).colorScheme.error,
                       shape: BoxShape.circle,
                     ),
                     constraints: BoxConstraints(minWidth: 16, minHeight: 16),
@@ -191,7 +191,13 @@ class _HomeScreenState extends State<HomeScreen> {
       drawer: AppDrawer(),
       body:
           isLoading
-              ? Center(child: CircularProgressIndicator())
+              ? Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              )
               : RefreshIndicator(
                 onRefresh:
                     fetchHomeData, // Now correctly accepts a Future<void> function

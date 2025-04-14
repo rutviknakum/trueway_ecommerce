@@ -1,6 +1,9 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:trueway_ecommerce/screens/Checkout_Screens/AddressScreen.dart';
+import 'package:trueway_ecommerce/utils/Theme_Config.dart';
 import '../providers/cart_provider.dart';
 
 class CartScreen extends StatelessWidget {
@@ -12,7 +15,7 @@ class CartScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(
           "Shopping Cart",
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: Theme.of(context).appBarTheme.titleTextStyle,
         ),
       ),
       body:
@@ -56,7 +59,9 @@ class CartScreen extends StatelessWidget {
                                   child: Container(
                                     width: 70,
                                     height: 70,
-                                    color: Colors.grey[100],
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.surface.withOpacity(0.9),
                                     child:
                                         imageUrl.isNotEmpty
                                             ? Image.network(
@@ -73,7 +78,10 @@ class CartScreen extends StatelessWidget {
                                                   child: Icon(
                                                     Icons.image_not_supported,
                                                     size: 30,
-                                                    color: Colors.grey[400],
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .onSurface
+                                                        .withOpacity(0.4),
                                                   ),
                                                 );
                                               },
@@ -82,7 +90,10 @@ class CartScreen extends StatelessWidget {
                                               child: Icon(
                                                 Icons.image_not_supported,
                                                 size: 30,
-                                                color: Colors.grey[400],
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurface
+                                                    .withOpacity(0.4),
                                               ),
                                             ),
                                   ),
@@ -107,7 +118,10 @@ class CartScreen extends StatelessWidget {
                                       Text(
                                         "₹${item.price}",
                                         style: TextStyle(
-                                          color: Colors.green,
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.secondary,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -262,10 +276,10 @@ class CartScreen extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black12,
+            color: Theme.of(context).shadowColor.withOpacity(0.1),
             offset: Offset(0, -2),
             blurRadius: 5,
           ),
@@ -286,7 +300,7 @@ class CartScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.green,
+                  color: Theme.of(context).colorScheme.secondary,
                 ),
               ),
             ],
@@ -301,14 +315,17 @@ class CartScreen extends StatelessWidget {
                 children: [
                   Text(
                     "Discount:",
-                    style: TextStyle(fontSize: 16, color: Colors.green),
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Theme.of(context).colorScheme.secondary,
+                    ),
                   ),
                   Text(
                     "-₹${cart.discountAmount.toStringAsFixed(2)}",
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Colors.green,
+                      color: Theme.of(context).colorScheme.secondary,
                     ),
                   ),
                 ],
@@ -343,13 +360,7 @@ class CartScreen extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                padding: EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
+              style: ThemeConfig.getPrimaryButtonStyle(),
               onPressed:
                   cart.items.isEmpty
                       ? null // Disable button if cart is empty
@@ -363,7 +374,7 @@ class CartScreen extends StatelessWidget {
                       },
               child: Text(
                 "Proceed to Checkout",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
             ),
           ),

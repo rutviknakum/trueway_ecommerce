@@ -1,6 +1,5 @@
 // auth_service.dart
 import 'dart:convert';
-import 'dart:math';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import 'storage_service.dart';
@@ -17,7 +16,7 @@ class AuthService {
     _authToken = await _storage.getAuthToken();
   }
 
-  // Authentication methods
+  // Authentication methods with server priority
   Future<Map<String, dynamic>> loginWithServer(
     String email,
     String password,
@@ -36,8 +35,8 @@ class AuthService {
 
       final jwtResponse = await http.post(
         jwtUrl,
-        headers: {"Content-Type": "application/x-www-form-urlencoded"},
-        body: {"username": email, "password": password},
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"username": email, "password": password}),
       );
 
       print("JWT Auth response status: ${jwtResponse.statusCode}");
@@ -54,15 +53,18 @@ class AuthService {
         String name = authData['user_display_name'] ?? "";
         await _storage.setUserName(name);
 
+        // Set is_local_user to false since this is a server login
+        await _storage.setIsLocalUser(false);
+
         int userId = 0;
         if (authData['user_id'] != null) {
           userId = authData['user_id'];
-          await _storage.setUserId(userId);
+          await _storage.setUserId(userId.toString());
           await _storage.setCurrentUserId(userId.toString());
 
           // Store the entire user data in one go
           final userData = {
-            "user_id": userId,
+            "user_id": userId.toString(),
             "email": email,
             "name": name,
             "auth_type": "jwt",
@@ -106,6 +108,7 @@ class AuthService {
     }
   }
 
+  // Server-first signup approach
   Future<Map<String, dynamic>> signupBasic(
     String firstName,
     String lastName,
@@ -122,88 +125,92 @@ class AuthService {
     }
 
     try {
-      // Clear any previous user data to prevent data leakage
-      await _storage.clearAllUserData();
+      // First check if the email already exists
+      final emailExists = await checkEmailExists(email);
 
-      // First check if the email already exists by trying to log in
-      final loginResult = await loginWithServer(email, password);
+      if (emailExists) {
+        // If email exists, try to log in
+        final loginResult = await loginWithServer(email, password);
 
-      // If login succeeds, it means the account already exists
-      if (loginResult['success']) {
-        // Update the user data with the provided information
-        final fullName = "$firstName $lastName";
-        await _storage.setUserName(fullName);
-        await _storage.setUserFirstName(firstName);
-        await _storage.setUserLastName(lastName);
-        await _storage.setUserPhone(mobile);
-        await _storage.setUserEmail(email); // Ensure email is set
+        if (loginResult['success']) {
+          // Update the user data with the provided information
+          final fullName = "$firstName $lastName";
+          await _storage.setUserName(fullName);
+          await _storage.setUserFirstName(firstName);
+          await _storage.setUserLastName(lastName);
+          await _storage.setUserPhone(mobile);
+          await _storage.setUserEmail(email);
+          await _storage.setIsLocalUser(false);
 
-        return {
-          "success": true,
-          "message": "Logged in successfully",
-          "email": email,
-          "name": fullName,
-        };
+          return {
+            "success": true,
+            "message": "Logged in successfully",
+            "email": email,
+            "name": fullName,
+          };
+        } else {
+          // Email exists but password doesn't match
+          return {
+            "success": false,
+            "error":
+                "An account with this email already exists. Please log in instead.",
+            "account_exists": true,
+          };
+        }
       }
 
-      // If we reach here, we need to implement a local-first registration approach
-      print("Implementing local registration workaround");
-
-      // Generate a unique user ID based on the email
-      final userId = email.hashCode.toString();
-      final fullName = "$firstName $lastName";
-
-      // Save all user data
-      await _storage.setUserEmail(email);
-      await _storage.setUserName(fullName);
-      await _storage.setUserFirstName(firstName);
-      await _storage.setUserLastName(lastName);
-      await _storage.setUserPhone(mobile);
-      await _storage.setUserId(userId);
-      await _storage.setCurrentUserId(userId);
-
-      // Store the complete user data in one go
-      final userData = {
-        "user_id": userId,
-        "email": email,
-        "name": fullName,
-        "first_name": firstName,
-        "last_name": lastName,
-        "phone": mobile,
-        "auth_type": "local",
-      };
-      await _storage.updateUserData(userData);
-
-      // Store the password securely (you may want to use Flutter Secure Storage for this in production)
-      await _storage.setLocalUserPassword(password);
-
-      // Set a flag indicating this is a locally registered user
-      await _storage.setIsLocalUser(true);
-
-      // Mark the user as logged in
-      _authToken = "local_auth_$userId"; // Pseudo token
-      await _storage.setAuthToken(_authToken!);
-
-      print("Local registration successful: $userId - $fullName");
-
-      // Also make an attempt to register on the server, but don't wait for the result
-      _attemptServerRegistration(
+      // Email doesn't exist, proceed with server registration
+      print("Attempting server registration for new user: $email");
+      final serverResult = await _attemptServerRegistration(
         firstName,
         lastName,
         mobile,
         email,
         password,
-      ).then((result) {
-        print("Server registration attempt result: $result");
-      });
+      );
 
-      return {
-        "success": true,
-        "message": "Account created successfully",
-        "email": email,
-        "name": fullName,
-        "local_only": true,
-      };
+      if (serverResult) {
+        // Server registration successful, log in
+        print("Server registration successful, attempting login");
+
+        // Wait briefly for server to process the registration
+        await Future.delayed(Duration(milliseconds: 500));
+
+        final loginAfterRegister = await loginWithServer(email, password);
+        if (loginAfterRegister['success']) {
+          return {
+            "success": true,
+            "message": "Account created successfully on server",
+            "email": email,
+            "name": "$firstName $lastName",
+            "local_only": false,
+          };
+        } else {
+          // Registration seemed to succeed but login failed - this is odd
+          print(
+            "Warning: User created on server but login failed. Login error: ${loginAfterRegister['error']}",
+          );
+
+          // Create a temporary local user as a fallback
+          return await _createLocalUserAsFallback(
+            firstName,
+            lastName,
+            mobile,
+            email,
+            password,
+          );
+        }
+      } else {
+        // Server registration failed, create local user as fallback
+        print("Server registration failed, creating local user as fallback");
+        return await _createLocalUserAsFallback(
+          firstName,
+          lastName,
+          mobile,
+          email,
+          password,
+        );
+      }
     } catch (e) {
       print("Signup exception: $e");
       return {
@@ -214,7 +221,61 @@ class AuthService {
     }
   }
 
-  // Attempt server registration in the background
+  // Create local user as fallback when server registration fails
+  Future<Map<String, dynamic>> _createLocalUserAsFallback(
+    String firstName,
+    String lastName,
+    String mobile,
+    String email,
+    String password,
+  ) async {
+    // Generate a unique user ID based on the email
+    final userId = email.hashCode.toString();
+    final fullName = "$firstName $lastName";
+
+    // Save all user data
+    await _storage.setUserEmail(email);
+    await _storage.setUserName(fullName);
+    await _storage.setUserFirstName(firstName);
+    await _storage.setUserLastName(lastName);
+    await _storage.setUserPhone(mobile);
+    await _storage.setUserId(userId);
+    await _storage.setCurrentUserId(userId);
+
+    // Store the complete user data in one go
+    final userData = {
+      "user_id": userId,
+      "email": email,
+      "name": fullName,
+      "first_name": firstName,
+      "last_name": lastName,
+      "phone": mobile,
+      "auth_type": "local",
+    };
+    await _storage.updateUserData(userData);
+
+    // Store the password securely
+    await _storage.setLocalUserPassword(password);
+
+    // Set a flag indicating this is a locally registered user
+    await _storage.setIsLocalUser(true);
+
+    // Mark the user as logged in
+    _authToken = "local_auth_$userId"; // Pseudo token
+    await _storage.setAuthToken(_authToken!);
+
+    print("Local user registration (fallback) successful: $userId - $fullName");
+
+    return {
+      "success": true,
+      "message": "Account created locally (server registration failed)",
+      "email": email,
+      "name": fullName,
+      "local_only": true,
+    };
+  }
+
+  // Improved server registration with multiple attempts
   Future<bool> _attemptServerRegistration(
     String firstName,
     String lastName,
@@ -223,47 +284,106 @@ class AuthService {
     String password,
   ) async {
     try {
-      // Try multiple registration approaches
+      // 1. Try WooCommerce API first - the most reliable approach
+      print("Trying WooCommerce API registration");
+      final customerUrl = Uri.parse(
+        "${ApiConfig.baseUrl}${ApiConfig.customersEndpoint}?consumer_key=${ApiConfig.consumerKey}&consumer_secret=${ApiConfig.consumerSecret}",
+      );
 
-      // 1. WordPress REST API
-      try {
-        final wpUrl = Uri.parse(
-          "${ApiConfig.baseUrl}/wp-json/wp/v2/users/register",
-        );
-        final wpPayload = {
-          "username": email,
-          "email": email,
-          "password": password,
+      final wooPayload = {
+        "email": email,
+        "first_name": firstName,
+        "last_name": lastName,
+        "username": email,
+        "password": password,
+        "billing": {
           "first_name": firstName,
           "last_name": lastName,
-        };
+          "email": email,
+          "phone": mobile,
+          "address_1": "Default Address",
+          "city": "Default City",
+          "state": "State",
+          "postcode": "000000",
+          "country": "IN",
+        },
+        "shipping": {
+          "first_name": firstName,
+          "last_name": lastName,
+          "address_1": "Default Address",
+          "city": "Default City",
+          "state": "State",
+          "postcode": "000000",
+          "country": "IN",
+        },
+      };
 
-        final wpResponse = await http.post(
-          wpUrl,
-          headers: {"Content-Type": "application/json"},
-          body: jsonEncode(wpPayload),
-        );
+      final wooResponse = await http.post(
+        customerUrl,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(wooPayload),
+      );
 
-        if (wpResponse.statusCode >= 200 && wpResponse.statusCode < 300) {
-          print("Server registration succeeded via WordPress API");
-          return true;
-        }
-      } catch (e) {
-        print("WordPress registration attempt failed: $e");
+      print("WooCommerce registration response: ${wooResponse.statusCode}");
+      print("WooCommerce registration response body: ${wooResponse.body}");
+
+      if (wooResponse.statusCode == 201 || wooResponse.statusCode == 200) {
+        print("Server registration succeeded via WooCommerce API");
+        return true;
       }
 
-      // 2. Custom registration endpoint (many WordPress sites have this)
-      try {
+      // 2. If WooCommerce API fails, try WordPress user creation
+      print("Trying WordPress user creation API");
+      final wpUrl = Uri.parse("${ApiConfig.baseUrl}/wp/v2/users");
+
+      // Get auth headers with admin credentials if available, or use basic WooCommerce auth
+      final headers = {
+        "Content-Type": "application/json",
+        "Authorization":
+            "Basic " +
+            base64Encode(
+              utf8.encode(
+                '${ApiConfig.consumerKey}:${ApiConfig.consumerSecret}',
+              ),
+            ),
+      };
+
+      final wpPayload = {
+        "username": email,
+        "email": email,
+        "password": password,
+        "name": "$firstName $lastName",
+        "first_name": firstName,
+        "last_name": lastName,
+        "roles": ["customer"],
+        "meta": {"phone": mobile},
+      };
+
+      final wpResponse = await http.post(
+        wpUrl,
+        headers: headers,
+        body: jsonEncode(wpPayload),
+      );
+
+      print("WordPress user creation response: ${wpResponse.statusCode}");
+
+      if (wpResponse.statusCode == 201 || wpResponse.statusCode == 200) {
+        print("Server registration succeeded via WordPress user API");
+        return true;
+      }
+
+      // 3. Try custom endpoint registration if available
+      if (ApiConfig.baseUrl.contains("wp-json")) {
+        print("Trying custom registration endpoint");
         final customUrl = Uri.parse(
-          "${ApiConfig.baseUrl}/wp-json/custom/v1/register",
+          "${ApiConfig.baseUrl}/simple-jwt-login/v1/users",
         );
+
         final customPayload = {
-          "username": email,
           "email": email,
           "password": password,
-          "first_name": firstName,
-          "last_name": lastName,
-          "phone": mobile,
+          "username": email,
+          "name": "$firstName $lastName",
         };
 
         final customResponse = await http.post(
@@ -272,222 +392,121 @@ class AuthService {
           body: jsonEncode(customPayload),
         );
 
-        if (customResponse.statusCode >= 200 &&
-            customResponse.statusCode < 300) {
+        print(
+          "Custom registration endpoint response: ${customResponse.statusCode}",
+        );
+
+        if (customResponse.statusCode == 201 ||
+            customResponse.statusCode == 200) {
           print("Server registration succeeded via custom endpoint");
           return true;
         }
-      } catch (e) {
-        print("Custom endpoint registration attempt failed: $e");
       }
 
-      // 3. WooCommerce API - last resort, but still try
-      try {
-        final customerUrl = Uri.parse(
-          "${ApiConfig.baseUrl}${ApiConfig.customersEndpoint}?consumer_key=${ApiConfig.consumerKey}&consumer_secret=${ApiConfig.consumerSecret}",
-        );
-
-        final wooPayload = {
-          "email": email,
-          "first_name": firstName,
-          "last_name": lastName,
-          "username": email,
-          "password": password,
-          "billing": {
-            "first_name": firstName,
-            "last_name": lastName,
-            "email": email,
-            "phone": mobile,
-            "address_1": "Default Address",
-            "city": "Default City",
-            "state": "State",
-            "postcode": "000000",
-            "country": "IN",
-          },
-          "shipping": {
-            "first_name": firstName,
-            "last_name": lastName,
-            "address_1": "Default Address",
-            "city": "Default City",
-            "state": "State",
-            "postcode": "000000",
-            "country": "IN",
-          },
-        };
-
-        // Try multiple postcode formats
-        for (final postcode in ["000000", "123456", "400001", "", "      "]) {
-          try {
-            (wooPayload["billing"] as Map<String, dynamic>)["postcode"] =
-                postcode;
-            (wooPayload["shipping"] as Map<String, dynamic>)["postcode"] =
-                postcode;
-
-            final wooResponse = await http.post(
-              customerUrl,
-              headers: {"Content-Type": "application/json"},
-              body: jsonEncode(wooPayload),
-            );
-
-            if (wooResponse.statusCode == 201) {
-              print(
-                "Server registration succeeded via WooCommerce API with postcode: $postcode",
-              );
-              return true;
-            }
-          } catch (e) {
-            print(
-              "WooCommerce registration attempt failed with postcode $postcode: $e",
-            );
-          }
-        }
-      } catch (e) {
-        print("All WooCommerce registration attempts failed: $e");
-      }
-
+      print("All server registration attempts failed");
       return false;
     } catch (e) {
-      print("All server registration attempts failed: $e");
+      print("Server registration error: $e");
       return false;
     }
   }
 
   // Check if user is logged in
   Future<bool> isLoggedIn() async {
-    // First check if there's a standard auth token
-    if (_authToken != null) return true;
-
-    // Load token from storage if not in memory
-    await _loadAuthToken();
-    if (_authToken != null) return true;
-
-    // Check for basic authentication
-    final basicAuth = await _storage.getBasicAuth();
-    if (basicAuth != null) {
-      return true;
-    }
-
-    // Check for local authentication
-    final isLocalUser = await _storage.getIsLocalUser();
-    final userId = await _storage.getUserId();
-    final userEmail = await _storage.getUserEmail();
-
-    if (isLocalUser && userId != null && userEmail != null) {
-      // Generate a pseudo token if needed
-      if (_authToken == null) {
-        _authToken = "local_auth_$userId";
-        await _storage.setAuthToken(_authToken!);
+    try {
+      // First check if there's a standard auth token
+      if (_authToken != null &&
+          _authToken!.isNotEmpty &&
+          _authToken != 'null') {
+        // Validate that we also have a user email - extra check for data consistency
+        final email = await _storage.getUserEmail();
+        return email != null && email.isNotEmpty;
       }
-      return true;
-    }
 
-    return false;
+      // Load token from storage if not in memory
+      await _loadAuthToken();
+      if (_authToken != null &&
+          _authToken!.isNotEmpty &&
+          _authToken != 'null') {
+        // Validate that we also have a user email - extra check for data consistency
+        final email = await _storage.getUserEmail();
+        return email != null && email.isNotEmpty;
+      }
+
+      // Check for basic authentication
+      final basicAuth = await _storage.getBasicAuth();
+      if (basicAuth != null && basicAuth.isNotEmpty) {
+        // Validate that we also have a user email - extra check for data consistency
+        final email = await _storage.getUserEmail();
+        return email != null && email.isNotEmpty;
+      }
+
+      // Check for local authentication
+      final isLocalUser = await _storage.getIsLocalUser();
+      final userId = await _storage.getUserId();
+      final userEmail = await _storage.getUserEmail();
+      final localPassword = await _storage.getLocalUserPassword();
+
+      if (isLocalUser &&
+          userId != null &&
+          userEmail != null &&
+          localPassword != null &&
+          userId.isNotEmpty &&
+          userEmail.isNotEmpty &&
+          localPassword.isNotEmpty) {
+        // Generate a pseudo token if needed
+        if (_authToken == null || _authToken!.isEmpty || _authToken == 'null') {
+          _authToken = "local_auth_$userId";
+          await _storage.setAuthToken(_authToken!);
+        }
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      print("Error checking login status: $e");
+      return false;
+    }
   }
 
-  // Enhanced login method to handle local auth and prevent data leakage
+  // Login method that tries server first, then local
   Future<Map<String, dynamic>> login(String email, String password) async {
     if (email.isEmpty || password.isEmpty) {
       return {"success": false, "error": "Email and password are required"};
     }
 
     try {
-      // Check if trying to log in with the same email
-      final existingEmail = await _storage.getUserEmail();
-      final isLocalUser = await _storage.getIsLocalUser();
+      // Try server authentication first
+      print("Attempting server login with email: $email");
 
-      // Debug local user data
-      final localPassword = await _storage.getLocalUserPassword();
-      final authToken = await _storage.getAuthToken();
-      final customerID = await _storage.getCustomerId();
-
-      print("DEBUG: User Email: $existingEmail");
-      print("DEBUG: Is Local User: $isLocalUser");
-      print("DEBUG: Has Local Password: ${localPassword != null}");
-      if (authToken != null) {
-        print(
-          "DEBUG: Auth Token: ${authToken.substring(0, min(10, authToken.length))}...",
-        );
-      }
-      print("DEBUG: Customer ID: $customerID");
-
-      // Only clear data if logging in with a different email
-      if (existingEmail != email) {
-        await _storage.clearAllUserData();
-        print("Cleared previous user data - different email");
-      } else {
-        print("Same email - keeping existing data");
-      }
-
-      // Try local authentication first if this email matches stored local user
-      if (isLocalUser && existingEmail == email) {
-        final storedPassword = await _storage.getLocalUserPassword();
-
-        if (storedPassword == password) {
-          // Local login successful
-          final userId =
-              await _storage.getUserId() ?? email.hashCode.toString();
-          final userName = await _storage.getUserName() ?? email.split('@')[0];
-
-          // Generate a pseudo token
-          _authToken = "local_auth_$userId";
-          await _storage.setAuthToken(_authToken!);
-          await _storage.setCurrentUserId(userId);
-
-          // Ensure all user data is properly stored
-          final userData = {
-            "user_id": userId,
-            "email": email,
-            "name": userName,
-            "auth_type": "local",
-            "local_only": true,
-          };
-          await _storage.updateUserData(userData);
-
-          print("Local login successful: $userId - $userName");
-
-          return {
-            "success": true,
-            "email": email,
-            "name": userName,
-            "message": "Logged in successfully (local mode)",
-            "local_only": true,
-          };
-        } else {
-          print(
-            "Local password mismatch: stored length=${storedPassword?.length}, provided length=${password.length}",
-          );
-        }
-      }
-
-      // First try to log in with server authentication
-      print(
-        "Attempting login with email: $email, password length: ${password.length}",
-      );
-
-      // Try JWT authentication
+      // JWT authentication with server
       final jwtUrl = Uri.parse(ApiConfig.baseUrl + ApiConfig.authEndpoint);
       final jwtResponse = await http.post(
         jwtUrl,
-        headers: {"Content-Type": "application/x-www-form-urlencoded"},
-        body: {"username": email, "password": password},
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"username": email, "password": password}),
       );
 
       print("JWT Auth response status: ${jwtResponse.statusCode}");
 
-      // If JWT auth succeeded
+      // If JWT auth succeeded, use it
       if (jwtResponse.statusCode == 200) {
         final authData = json.decode(jwtResponse.body);
 
         String name = authData['user_display_name'] ?? "";
-        int userId = 0;
+        String userId = "0";
         if (authData['user_id'] != null) {
-          userId = authData['user_id'];
+          userId = authData['user_id'].toString();
         } else {
           // Generate a user ID from email if none provided
-          userId = email.hashCode;
+          userId = email.hashCode.toString();
         }
 
-        // Store the auth token and user info
+        // First, clear any existing tokens to prevent conflicts
+        await _storage.setAuthToken("");
+        await _storage.setBasicAuth("");
+
+        // Then store the new auth token and user info
         await _storage.setAuthToken(authData['token']);
         _authToken = authData['token']; // Also set in memory
 
@@ -497,25 +516,28 @@ class AuthService {
           "email": email,
           "name": name,
           "auth_type": "jwt",
-          "current_user_id": userId.toString(),
+          "current_user_id": userId,
         };
         await _storage.updateUserData(userData);
 
         // Explicitly set these important fields to ensure they're set
         await _storage.setUserId(userId);
-        await _storage.setCurrentUserId(userId.toString());
+        await _storage.setCurrentUserId(userId);
         await _storage.setUserEmail(email);
         await _storage.setUserName(name);
 
-        // Remove local user flag if it exists
+        // Set local user flag to false
         await _storage.setIsLocalUser(false);
+
+        // Clear local password if it exists
+        await _storage.setLocalUserPassword("");
 
         // Try to get WooCommerce customer ID
         try {
           final customerId = await getCustomerId(email);
           if (customerId != null) {
             await _storage.setCustomerId(customerId);
-            userData["customer_id"] = customerId;
+            userData["customer_id"] = customerId as String;
             await _storage.updateUserData(userData);
           }
         } catch (e) {
@@ -530,6 +552,43 @@ class AuthService {
         };
       }
 
+      // If server auth failed, check if we have a local user with this email
+      print("Server login failed, checking for local user");
+      final existingEmail = await _storage.getUserEmail();
+      final isLocalUser = await _storage.getIsLocalUser();
+      final localPassword = await _storage.getLocalUserPassword();
+
+      // Try local authentication as fallback
+      if (isLocalUser && existingEmail == email && localPassword == password) {
+        final userId = await _storage.getUserId() ?? email.hashCode.toString();
+        final userName = await _storage.getUserName() ?? email.split('@')[0];
+
+        // Generate a pseudo token
+        _authToken = "local_auth_$userId";
+        await _storage.setAuthToken(_authToken!);
+        await _storage.setCurrentUserId(userId);
+
+        // Ensure all user data is properly stored
+        final userData = {
+          "user_id": userId,
+          "email": email,
+          "name": userName,
+          "auth_type": "local",
+          "local_only": true,
+        };
+        await _storage.updateUserData(userData);
+
+        print("Local login successful: $userId - $userName");
+
+        return {
+          "success": true,
+          "email": email,
+          "name": userName,
+          "message": "Logged in successfully (local mode)",
+          "local_only": true,
+        };
+      }
+
       // Try alternative login methods
       final alternativeResult = await _handleFailedLogin(
         email,
@@ -540,50 +599,12 @@ class AuthService {
         return alternativeResult;
       }
 
-      // If we reach here, try local authentication again (as a fallback)
-      if (existingEmail == email && localPassword != null) {
-        // Try a case-insensitive comparison for email as a fallback
-        if (localPassword == password ||
-            (localPassword.toLowerCase() == password.toLowerCase())) {
-          final userId =
-              await _storage.getUserId() ?? email.hashCode.toString();
-          final userName = await _storage.getUserName() ?? email.split('@')[0];
-
-          // Generate a pseudo token
-          _authToken = "local_auth_$userId";
-          await _storage.setAuthToken(_authToken!);
-          await _storage.setCurrentUserId(userId);
-
-          // Ensure we're marked as a local user
-          await _storage.setIsLocalUser(true);
-
-          print("Local login successful as fallback: $userId - $userName");
-
-          return {
-            "success": true,
-            "email": email,
-            "name": userName,
-            "message": "Logged in successfully (local mode)",
-            "local_only": true,
-          };
-        }
-      }
-
       // All login methods failed
-      // Try to provide a more specific error message
-      if (isLocalUser && existingEmail == email) {
-        return {
-          "success": false,
-          "error": "Incorrect password for local account.",
-          "account_exists": true,
-        };
-      } else {
-        return {
-          "success": false,
-          "error": "Login failed. Please check your credentials.",
-          "account_exists": false,
-        };
-      }
+      return {
+        "success": false,
+        "error": "Login failed. Please check your credentials.",
+        "account_exists": await checkEmailExists(email) ? true : false,
+      };
     } catch (e) {
       print("Login exception: $e");
       return {
@@ -594,15 +615,23 @@ class AuthService {
     }
   }
 
-  // Logout method
+  // Improved logout method
   Future<Map<String, dynamic>> logout() async {
     try {
-      await _storage.clearAllUserData();
+      // Clear all authentication data
+      await _storage.setAuthToken('');
+      await _storage.setBasicAuth('');
 
-      // Clear cached auth token
+      // Also clear the in-memory token
       _authToken = null;
 
-      print("User logged out successfully - all data cleared");
+      // Important: Set is_local_user to false
+      await _storage.setIsLocalUser(false);
+
+      // Clear local password
+      await _storage.setLocalUserPassword('');
+
+      print("User logged out successfully - auth tokens cleared");
 
       return {"success": true, "message": "Logged out successfully"};
     } catch (e) {
@@ -684,20 +713,30 @@ class AuthService {
 
       final response = await http.post(
         jwtUrl,
-        headers: {"Content-Type": "application/x-www-form-urlencoded"},
-        body: {"username": username, "password": password},
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"username": username, "password": password}),
       );
 
       if (response.statusCode == 200) {
         final authData = json.decode(response.body);
+
+        // Clear existing tokens first
+        await _storage.setAuthToken("");
+        await _storage.setBasicAuth("");
+
+        // Set the new token
         await _storage.setAuthToken(authData['token']);
         _authToken = authData['token']; // Also set in memory
+
+        // Set user data
         await _storage.setUserEmail(authData['user_email'] ?? "");
         await _storage.setUserName(authData['user_display_name'] ?? "");
+        await _storage.setIsLocalUser(false);
 
         if (authData['user_id'] != null) {
-          await _storage.setUserId(authData['user_id']);
-          await _storage.setCurrentUserId(authData['user_id'].toString());
+          String userId = authData['user_id'].toString();
+          await _storage.setUserId(userId);
+          await _storage.setCurrentUserId(userId);
         }
 
         return {
@@ -731,13 +770,20 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final userData = json.decode(response.body);
-        await _storage.setUserEmail(email);
+
+        // Clear existing tokens first
+        await _storage.setAuthToken("");
+
+        // Set the new auth data
         await _storage.setBasicAuth(basicAuthHeader);
+        await _storage.setUserEmail(email);
         await _storage.setUserName(userData['name'] ?? "");
+        await _storage.setIsLocalUser(false);
 
         if (userData['id'] != null) {
-          await _storage.setUserId(userData['id']);
-          await _storage.setCurrentUserId(userData['id'].toString());
+          String userId = userData['id'].toString();
+          await _storage.setUserId(userId);
+          await _storage.setCurrentUserId(userId);
         }
 
         return {
