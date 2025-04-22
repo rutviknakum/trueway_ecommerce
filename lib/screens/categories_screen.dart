@@ -9,7 +9,6 @@ import 'package:trueway_ecommerce/screens/product_details_screen.dart';
 import 'package:trueway_ecommerce/services/product_service.dart';
 
 class CategoriesScreen extends StatefulWidget {
-  // Add category parameter to enable redirection from HomeScreen
   final Map<String, dynamic>? category;
 
   const CategoriesScreen({Key? key, this.category}) : super(key: key);
@@ -44,19 +43,20 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     );
     _scrollController.addListener(_scrollListener);
 
-    // Handle pre-selected category from navigation
     if (widget.category != null) {
-      // If category is provided, set it as selected and fetch its products
-      final categoryId = widget.category!['id'] ?? -1;
-      final categoryName = widget.category!['name'] ?? "";
+      int categoryId;
+      if (widget.category!['id'] is int) {
+        categoryId = widget.category!['id'];
+      } else if (widget.category!['id'] is String) {
+        categoryId = int.tryParse(widget.category!['id'].toString()) ?? -1;
+      } else {
+        categoryId = -1;
+      }
 
-      // Set initial view to "View All" products for the selected category
+      final categoryName = widget.category!['name']?.toString() ?? "";
       _viewingAllProducts = true;
-
-      // Fetch categories first, then select the specified category
       fetchCategoriesAndInitialProducts(categoryId, categoryName);
     } else {
-      // Normal flow - fetch categories and select the first one
       fetchCategoriesAndProducts();
     }
   }
@@ -79,7 +79,6 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     }
   }
 
-  // New method to handle pre-selected category
   void fetchCategoriesAndInitialProducts(
     int categoryId,
     String categoryName,
@@ -99,7 +98,6 @@ class _CategoriesScreenState extends State<CategoriesScreen>
           });
         }
 
-        // Fetch products for the selected category with viewAll = true
         await updateProductsForCategory(
           categoryId,
           categoryName,
@@ -122,7 +120,6 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     }
   }
 
-  // Fetch categories and products on screen load
   void fetchCategoriesAndProducts() async {
     try {
       final productService = ProductService();
@@ -131,15 +128,27 @@ class _CategoriesScreenState extends State<CategoriesScreen>
       if (!_isMounted) return;
 
       if (fetchedCategories.isNotEmpty) {
+        int firstCategoryId;
+        if (fetchedCategories[0]['id'] is int) {
+          firstCategoryId = fetchedCategories[0]['id'];
+        } else if (fetchedCategories[0]['id'] is String) {
+          firstCategoryId =
+              int.tryParse(fetchedCategories[0]['id'].toString()) ?? -1;
+        } else {
+          firstCategoryId = -1;
+        }
+
+        String firstCategoryName =
+            fetchedCategories[0]['name']?.toString() ?? "";
+
         if (mounted) {
           setState(() {
             categories = fetchedCategories;
-            selectedCategoryId = fetchedCategories[0]['id'];
-            selectedCategoryName = fetchedCategories[0]['name'];
+            selectedCategoryId = firstCategoryId;
+            selectedCategoryName = firstCategoryName;
           });
         }
 
-        // Fetch products after categories are set
         await updateProductsForCategory(
           selectedCategoryId,
           selectedCategoryName,
@@ -161,7 +170,6 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     }
   }
 
-  // Update the products based on selected category
   Future<void> updateProductsForCategory(
     int categoryId,
     String categoryName, {
@@ -209,7 +217,6 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     }
   }
 
-  // Load more products when scrolling (for "View All" mode)
   Future<void> _loadMoreProducts() async {
     if (!_hasMoreProducts || _isLoadingMore || !mounted) return;
 
@@ -246,17 +253,22 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     }
   }
 
-  // Add product to cart with animation
   void _addToCart(BuildContext context, dynamic product) {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
 
-    // Extract product data
-    final productId = product["id"] ?? 0;
-    final productName = product["name"] ?? 'No Name';
+    int productId;
+    if (product["id"] is int) {
+      productId = product["id"];
+    } else if (product["id"] is String) {
+      productId = int.tryParse(product["id"].toString()) ?? 0;
+    } else {
+      productId = 0;
+    }
+
+    final productName = product["name"]?.toString() ?? 'No Name';
     final String priceStr = product['price']?.toString() ?? '0';
     final price = double.tryParse(priceStr) ?? 0.0;
 
-    // Extract image URL
     String imageUrl = '';
     if (product['images'] != null &&
         product['images'] is List &&
@@ -266,7 +278,6 @@ class _CategoriesScreenState extends State<CategoriesScreen>
       imageUrl = product['images'][0]['src'];
     }
 
-    // Create cart item with the new model structure
     final cartItem = CartItem(
       id: productId,
       name: productName,
@@ -277,14 +288,10 @@ class _CategoriesScreenState extends State<CategoriesScreen>
       imageUrl: null,
     );
 
-    // Add to cart
     cartProvider.addToCart(cartItem);
-
-    // Play animation
     _animationController.reset();
     _animationController.forward();
 
-    // Show confirmation
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -437,42 +444,112 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Left side: Categories list
-        SizedBox(
+        // Left side: Categories list with classic styling
+        Container(
           width: 100,
+          color: Colors.grey[50],
           child: ListView.builder(
             padding: EdgeInsets.symmetric(vertical: 10),
             itemCount: categories.length,
             itemBuilder: (context, index) {
               final category = categories[index];
-              final isSelected = selectedCategoryId == category['id'];
+
+              int categoryId;
+              if (category['id'] is int) {
+                categoryId = category['id'];
+              } else if (category['id'] is String) {
+                categoryId = int.tryParse(category['id'].toString()) ?? -1;
+              } else {
+                categoryId = -1;
+              }
+
+              final isSelected = selectedCategoryId == categoryId;
+
+              String imageUrl = '';
+              if (category['image'] != null) {
+                if (category['image'] is Map &&
+                    category['image']['src'] != null) {
+                  imageUrl = category['image']['src'].toString();
+                } else if (category['image'] is String) {
+                  imageUrl = category['image'];
+                }
+              }
 
               return GestureDetector(
                 onTap: () {
-                  updateProductsForCategory(category['id'], category['name']);
+                  String categoryName = '';
+                  if (category['name'] != null) {
+                    categoryName = category['name'].toString();
+                  }
+
+                  updateProductsForCategory(categoryId, categoryName);
                 },
                 child: Container(
-                  padding: EdgeInsets.symmetric(vertical: 16, horizontal: 10),
+                  padding: EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isSelected ? Colors.white : Colors.grey[50],
                     border: Border(
+                      bottom: BorderSide(color: Colors.grey[300]!, width: 1),
                       left: BorderSide(
-                        color: isSelected ? Colors.orange : Colors.transparent,
+                        color:
+                            isSelected ? Colors.teal[600]! : Colors.transparent,
                         width: 3,
                       ),
                     ),
                   ),
-                  child: Text(
-                    category['name'] ?? 'Unknown',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: isSelected ? Colors.orange : Colors.black87,
-                      fontWeight:
-                          isSelected ? FontWeight.bold : FontWeight.normal,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.left,
+                  child: Column(
+                    children: [
+                      // Category Image with classic frame
+                      Container(
+                        width: 50,
+                        height: 50,
+                        padding: EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(
+                            color: Colors.grey[300]!,
+                            width: 1,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child:
+                            imageUrl.isNotEmpty
+                                ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(2),
+                                  child: Image.network(
+                                    imageUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Icon(
+                                        Icons.category,
+                                        size: 24,
+                                        color: Colors.grey[400],
+                                      );
+                                    },
+                                  ),
+                                )
+                                : Icon(
+                                  Icons.category,
+                                  size: 24,
+                                  color: Colors.grey[400],
+                                ),
+                      ),
+                      SizedBox(height: 8),
+                      // Category Name with classic typography
+                      Text(
+                        category['name']?.toString() ?? 'Unknown',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color:
+                              isSelected ? Colors.teal[700] : Colors.grey[800],
+                          fontWeight:
+                              isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -480,16 +557,21 @@ class _CategoriesScreenState extends State<CategoriesScreen>
           ),
         ),
 
-        // Right side: Products
+        // Right side: Products Grid with classic styling
         Expanded(
           child: Container(
-            color: Colors.grey[100],
+            color: Colors.white,
             child: Column(
               children: [
-                // Category Header with "View All" link
+                // Category Header with classic styling
                 Container(
-                  color: Colors.grey[100],
-                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border(
+                      bottom: BorderSide(color: Colors.grey[300]!, width: 1),
+                    ),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -497,27 +579,34 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                         child: Text(
                           selectedCategoryName,
                           style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[800],
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      GestureDetector(
-                        onTap: () {
-                          // Implement View All functionality
+                      TextButton(
+                        onPressed: () {
                           updateProductsForCategory(
                             selectedCategoryId,
                             selectedCategoryName,
                             viewAll: true,
                           );
                         },
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          minimumSize: Size(0, 0),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
                         child: Text(
                           "View All",
                           style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.orange,
+                            fontSize: 13,
+                            color: Colors.teal[600],
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -526,14 +615,14 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                   ),
                 ),
 
-                // Products List
+                // Products Grid View with classic styling
                 Expanded(
                   child:
                       isLoadingProducts
                           ? Center(
                             child: CircularProgressIndicator(
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.orange,
+                                Colors.teal[600]!,
                               ),
                             ),
                           )
@@ -543,16 +632,16 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
-                                  Icons.category_outlined,
-                                  size: 64,
+                                  Icons.inventory_2_outlined,
+                                  size: 48,
                                   color: Colors.grey[400],
                                 ),
                                 SizedBox(height: 16),
                                 Text(
                                   'No products found',
                                   style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
                                     color: Colors.grey[700],
                                   ),
                                 ),
@@ -567,11 +656,19 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                               ],
                             ),
                           )
-                          : ListView.builder(
-                            padding: EdgeInsets.symmetric(horizontal: 10),
+                          : GridView.builder(
+                            padding: EdgeInsets.all(10),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  // Adjusted aspect ratio to remove extra space
+                                  childAspectRatio: 0.56,
+                                  crossAxisSpacing: 10,
+                                  mainAxisSpacing: 10,
+                                ),
                             itemCount: products.length,
                             itemBuilder: (context, index) {
-                              return _buildProductListItem(
+                              return _buildClassicProductItem(
                                 context,
                                 products[index],
                               );
@@ -588,86 +685,86 @@ class _CategoriesScreenState extends State<CategoriesScreen>
 
   Widget _buildAllProductsView() {
     return Container(
-      color: Colors.grey[100],
-      child: Column(
-        children: [
-          Expanded(
-            child:
-                isLoadingProducts
-                    ? Center(
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Colors.orange,
+      color: Colors.white,
+      child:
+          isLoadingProducts
+              ? Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.teal[600]!),
+                ),
+              )
+              : products.isEmpty
+              ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.inventory_2_outlined,
+                      size: 48,
+                      color: Colors.grey[400],
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'No products found',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ],
+                ),
+              )
+              : GridView.builder(
+                controller: _scrollController,
+                padding: EdgeInsets.all(10),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  // Adjusted aspect ratio to remove extra space
+                  childAspectRatio: 0.56,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                ),
+                itemCount:
+                    _isLoadingMore ? products.length + 1 : products.length,
+                itemBuilder: (context, index) {
+                  if (index == products.length && _isLoadingMore) {
+                    return Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.teal[600]!,
+                          ),
+                          strokeWidth: 2.0,
                         ),
                       ),
-                    )
-                    : products.isEmpty
-                    ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.category_outlined,
-                            size: 64,
-                            color: Colors.grey[400],
-                          ),
-                          SizedBox(height: 16),
-                          Text(
-                            'No products found',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey[700],
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                    : ListView.builder(
-                      controller: _scrollController,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 10,
-                      ),
-                      itemCount:
-                          _isLoadingMore
-                              ? products.length + 1
-                              : products.length,
-                      itemBuilder: (context, index) {
-                        if (index == products.length && _isLoadingMore) {
-                          return Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(16.0),
-                              child: CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.orange,
-                                ),
-                                strokeWidth: 2.0,
-                              ),
-                            ),
-                          );
-                        }
-                        return _buildProductListItem(context, products[index]);
-                      },
-                    ),
-          ),
-        ],
-      ),
+                    );
+                  }
+                  return _buildClassicProductItem(context, products[index]);
+                },
+              ),
     );
   }
 
-  Widget _buildProductListItem(BuildContext context, dynamic product) {
+  Widget _buildClassicProductItem(BuildContext context, dynamic product) {
     final wishlistProvider = Provider.of<WishlistProvider>(
       context,
       listen: false,
     );
 
-    // Extract product data safely
-    final productId = product["id"] ?? 0;
-    final productName = product["name"] ?? 'No Name';
+    int productId;
+    if (product["id"] is int) {
+      productId = product["id"];
+    } else if (product["id"] is String) {
+      productId = int.tryParse(product["id"].toString()) ?? 0;
+    } else {
+      productId = 0;
+    }
+
+    final productName = product["name"]?.toString() ?? 'No Name';
     wishlistProvider.isWishlisted(productId);
 
-    // Handle prices safely
     final String priceStr = product['price']?.toString() ?? '0';
     final String regularPriceStr = product['regular_price']?.toString() ?? '0';
     final price = double.tryParse(priceStr) ?? 0.0;
@@ -677,228 +774,247 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     final discountPercentage =
         hasDiscount ? ((regularPrice - price) / regularPrice) * 100 : 0;
 
-    // Extract image URL safely
     String imageUrl = '';
     if (product['images'] != null &&
         product['images'] is List &&
         product['images'].isNotEmpty &&
         product['images'][0] != null &&
         product['images'][0]['src'] != null) {
-      imageUrl = product['images'][0]['src'];
+      imageUrl = product['images'][0]['src'].toString();
     }
 
-    // Check if product is in stock
     final bool inStock = product['in_stock'] ?? true;
 
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProductDetailsScreen(product: product),
+    // Classic product card with border and subtle shadows
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.grey[300]!, width: 1),
+        borderRadius: BorderRadius.circular(4),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 2,
+            offset: Offset(0, 1),
           ),
-        );
-      },
-      child: Container(
-        margin: EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 4,
-              offset: Offset(0, 2),
+        ],
+      ),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ProductDetailsScreen(product: product),
             ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(15),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Product Image with Discount Label
-              Stack(
-                children: [
-                  // Product Image
-                  Hero(
-                    tag: 'product_$productId',
-                    child: Container(
-                      width: 110,
-                      height: 110,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child:
-                          imageUrl.isNotEmpty
-                              ? ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  imageUrl,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Center(
-                                      child: Icon(
-                                        Icons.image_not_supported,
-                                        size: 30,
-                                        color: Colors.grey[400],
-                                      ),
-                                    );
-                                  },
-                                ),
-                              )
-                              : Center(
-                                child: Icon(
-                                  Icons.image_not_supported,
-                                  size: 30,
-                                  color: Colors.grey[400],
-                                ),
-                              ),
+          );
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Product Image with classic frame styling
+            Stack(
+              children: [
+                // Product Image
+                Container(
+                  width: double.infinity,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    border: Border(
+                      bottom: BorderSide(color: Colors.grey[300]!, width: 1),
                     ),
                   ),
-
-                  // Discount Label
-                  if (hasDiscount)
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(8),
-                            bottomRight: Radius.circular(8),
-                          ),
-                        ),
-                        child: Text(
-                          "-${discountPercentage.toStringAsFixed(0)}%",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-
-              SizedBox(width: 15),
-
-              // Product Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Product Name
-                    Text(
-                      productName.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                        height: 1.3,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-
-                    SizedBox(height: 10),
-
-                    // Price Display - Wrapped in FittedBox to prevent overflow
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        children: [
-                          Text(
-                            "₹${price.toInt()}",
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                            ),
-                          ),
-                          if (hasDiscount) ...[
-                            SizedBox(width: 8),
-                            Text(
-                              "₹${regularPrice.toInt()}",
-                              style: TextStyle(
-                                fontSize: 14,
-                                decoration: TextDecoration.lineThrough,
-                                color: Colors.grey,
+                  child: Hero(
+                    tag: 'product_$productId',
+                    child:
+                        imageUrl.isNotEmpty
+                            ? Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Center(
+                                  child: Icon(
+                                    Icons.image_not_supported,
+                                    size: 24,
+                                    color: Colors.grey[400],
+                                  ),
+                                );
+                              },
+                            )
+                            : Center(
+                              child: Icon(
+                                Icons.image_not_supported,
+                                size: 24,
+                                color: Colors.grey[400],
                               ),
                             ),
-                          ],
+                  ),
+                ),
+
+                // Classic ribbon-style discount label
+                if (hasDiscount)
+                  Positioned(
+                    top: 8,
+                    right: 0,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red[700],
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 2,
+                            offset: Offset(0, 1),
+                          ),
                         ],
                       ),
-                    ),
-
-                    SizedBox(height: 10),
-
-                    // Stock Status
-                    Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: inStock ? Colors.green : Colors.red,
-                            shape: BoxShape.circle,
-                          ),
+                      child: Text(
+                        "-${discountPercentage.toStringAsFixed(0)}%",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
                         ),
-                        SizedBox(width: 6),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+
+            // Product Details section - REDUCED BOTTOM PADDING
+            Padding(
+              // Reduced bottom padding to remove extra space
+              padding: EdgeInsets.fromLTRB(8, 8, 8, 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Product Name
+                  Text(
+                    productName,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey[800],
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+
+                  // Very minimal space - similar to screenshot
+                  SizedBox(height: 2),
+
+                  // Price Display
+                  Row(
+                    children: [
+                      Text(
+                        "₹${price.toInt()}",
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[900],
+                        ),
+                      ),
+                      if (hasDiscount) ...[
+                        SizedBox(width: 4),
                         Text(
-                          inStock ? "In stock" : "Out of stock",
+                          "₹${regularPrice.toInt()}",
                           style: TextStyle(
-                            fontSize: 14,
-                            color: inStock ? Colors.green : Colors.red,
+                            fontSize: 11,
+                            decoration: TextDecoration.lineThrough,
+                            color: Colors.grey[500],
                           ),
                         ),
                       ],
-                    ),
+                    ],
+                  ),
 
-                    SizedBox(height: 10),
+                  // Reduced spacing between price and bottom controls
+                  SizedBox(height: 4),
 
-                    // Add to Cart Button
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap:
-                            inStock ? () => _addToCart(context, product) : null,
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          height: 36,
-                          width: 36,
-                          decoration: BoxDecoration(
-                            color: inStock ? Colors.white : Colors.grey[200],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color:
-                                  inStock
-                                      ? Colors.grey[300]!
-                                      : Colors.grey[300]!,
-                            ),
+                  // Stock status and Add to Cart row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Stock Status
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: inStock ? Colors.green[50] : Colors.red[50],
+                          border: Border.all(
+                            color:
+                                inStock ? Colors.green[300]! : Colors.red[300]!,
+                            width: 1,
                           ),
-                          child: Icon(
-                            Icons.shopping_cart,
-                            size: 18,
-                            color: inStock ? Colors.black87 : Colors.grey[400],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                        child: Text(
+                          inStock ? "In stock" : "Out of stock",
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w500,
+                            color:
+                                inStock ? Colors.green[700] : Colors.red[700],
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
+
+                      // Add to Cart Button
+                      GestureDetector(
+                        onTap:
+                            inStock ? () => _addToCart(context, product) : null,
+                        child: Container(
+                          // Adjusted padding to match screenshot
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                inStock ? Colors.teal[600] : Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                            boxShadow:
+                                inStock
+                                    ? [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        blurRadius: 1,
+                                        offset: Offset(0, 1),
+                                      ),
+                                    ]
+                                    : null,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.add_shopping_cart,
+                                color: Colors.white,
+                                size: 12,
+                              ),
+                              SizedBox(width: 2),
+                              Text(
+                                "Add",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
