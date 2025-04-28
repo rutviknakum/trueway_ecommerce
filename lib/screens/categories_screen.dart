@@ -19,7 +19,9 @@ class CategoriesScreen extends StatefulWidget {
 
 class _CategoriesScreenState extends State<CategoriesScreen>
     with SingleTickerProviderStateMixin {
+  // Basic state variables
   List categories = [];
+  List originalProducts = []; // Store original unfiltered products
   List products = [];
   int selectedCategoryId = -1;
   String selectedCategoryName = "";
@@ -33,6 +35,12 @@ class _CategoriesScreenState extends State<CategoriesScreen>
   bool _hasMoreProducts = true;
   final int _perPage = 20;
   final ScrollController _scrollController = ScrollController();
+
+  // Filter state variables
+  String _selectedSortOption = 'Default';
+  Map<String, dynamic> _activeFilters = {};
+  RangeValues _priceRange = RangeValues(0, 10000);
+  double _maxPrice = 10000;
 
   @override
   void initState() {
@@ -174,15 +182,24 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     int categoryId,
     String categoryName, {
     bool viewAll = false,
+    bool preserveFilters = false,
   }) async {
     if (!mounted) return;
 
     setState(() {
       isLoadingProducts = true;
       products = [];
+      originalProducts = [];
       _viewingAllProducts = viewAll;
       _currentPage = 1;
       _hasMoreProducts = true;
+
+      // Only reset filters if not preserving them
+      if (!preserveFilters) {
+        _activeFilters = {};
+        _selectedSortOption = 'Default';
+        _priceRange = RangeValues(0, 10000);
+      }
     });
 
     try {
@@ -195,6 +212,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
 
       if (mounted) {
         setState(() {
+          originalProducts = List.from(fetchedProducts);
           products = fetchedProducts;
           selectedCategoryId = categoryId;
           selectedCategoryName = categoryName;
@@ -203,6 +221,15 @@ class _CategoriesScreenState extends State<CategoriesScreen>
 
           if (viewAll) {
             _hasMoreProducts = fetchedProducts.length == _perPage;
+          }
+
+          // Calculate max price for price range filter
+          _calculateMaxPrice();
+
+          // If we have active filters, apply them to the new products
+          if (preserveFilters &&
+              (_activeFilters.isNotEmpty || _selectedSortOption != 'Default')) {
+            _applyFilters();
           }
         });
       }
@@ -236,10 +263,21 @@ class _CategoriesScreenState extends State<CategoriesScreen>
       if (mounted) {
         setState(() {
           if (moreProducts.isNotEmpty) {
-            products.addAll(moreProducts);
+            originalProducts.addAll(moreProducts); // Add to original products
+
+            // Apply current filters to new products if needed
+            if (_activeFilters.isNotEmpty || _selectedSortOption != 'Default') {
+              List filteredMoreProducts = _filterProducts(moreProducts);
+              products.addAll(filteredMoreProducts);
+            } else {
+              products.addAll(moreProducts);
+            }
           }
           _isLoadingMore = false;
           _hasMoreProducts = moreProducts.length == _perPage;
+
+          // Recalculate max price with new products
+          _calculateMaxPrice();
         });
       }
     } catch (e) {
@@ -251,6 +289,618 @@ class _CategoriesScreenState extends State<CategoriesScreen>
       }
       print("Error loading more products: $e");
     }
+  }
+
+  // Filter helper methods
+  void _calculateMaxPrice() {
+    double maxPrice = 0;
+    for (var product in originalProducts) {
+      final priceStr = product['price']?.toString() ?? '0';
+      final price = double.tryParse(priceStr) ?? 0.0;
+      if (price > maxPrice) {
+        maxPrice = price;
+      }
+    }
+
+    setState(() {
+      _maxPrice = maxPrice > 0 ? maxPrice : 10000;
+      if (_priceRange.end > _maxPrice) {
+        _priceRange = RangeValues(_priceRange.start, _maxPrice);
+      }
+    });
+  }
+
+  void _applyFilters() {
+    setState(() {
+      isLoadingProducts = true;
+    });
+
+    // Filter the products based on current filters
+    List filteredProducts = _filterProducts(originalProducts);
+
+    setState(() {
+      products = filteredProducts;
+      isLoadingProducts = false;
+    });
+  }
+
+  List _filterProducts(List productsToFilter) {
+    List filteredList = List.from(productsToFilter);
+
+    // Apply price filter
+    if (_activeFilters.containsKey('price')) {
+      RangeValues priceRange = _activeFilters['price'];
+      filteredList =
+          filteredList.where((product) {
+            final priceStr = product['price']?.toString() ?? '0';
+            final price = double.tryParse(priceStr) ?? 0.0;
+            return price >= priceRange.start && price <= priceRange.end;
+          }).toList();
+    }
+
+    // Apply stock filter
+    if (_activeFilters.containsKey('stock')) {
+      bool inStockOnly = _activeFilters['stock'] == 'instock';
+      filteredList =
+          filteredList.where((product) {
+            return product['in_stock'] == inStockOnly;
+          }).toList();
+    }
+
+    // Apply rating filter
+    if (_activeFilters.containsKey('rating')) {
+      String minRating = _activeFilters['rating'];
+      double ratingValue = double.tryParse(minRating) ?? 0.0;
+
+      filteredList =
+          filteredList.where((product) {
+            final ratingStr = product['average_rating']?.toString() ?? '0';
+            final rating = double.tryParse(ratingStr) ?? 0.0;
+            return rating >= ratingValue;
+          }).toList();
+    }
+
+    // Apply sorting
+    if (_selectedSortOption != 'Default') {
+      switch (_selectedSortOption) {
+        case 'Price: Low to High':
+          filteredList.sort((a, b) {
+            final priceA =
+                double.tryParse(a['price']?.toString() ?? '0') ?? 0.0;
+            final priceB =
+                double.tryParse(b['price']?.toString() ?? '0') ?? 0.0;
+            return priceA.compareTo(priceB);
+          });
+          break;
+        case 'Price: High to Low':
+          filteredList.sort((a, b) {
+            final priceA =
+                double.tryParse(a['price']?.toString() ?? '0') ?? 0.0;
+            final priceB =
+                double.tryParse(b['price']?.toString() ?? '0') ?? 0.0;
+            return priceB.compareTo(priceA);
+          });
+          break;
+        case 'Newest First':
+          filteredList.sort((a, b) {
+            final dateA =
+                a['date_created'] != null
+                    ? DateTime.parse(a['date_created'].toString())
+                    : DateTime(2000);
+            final dateB =
+                b['date_created'] != null
+                    ? DateTime.parse(b['date_created'].toString())
+                    : DateTime(2000);
+            return dateB.compareTo(dateA);
+          });
+          break;
+        case 'Popularity':
+          filteredList.sort((a, b) {
+            final ratingA =
+                a['average_rating'] != null
+                    ? double.tryParse(a['average_rating'].toString()) ?? 0.0
+                    : 0.0;
+            final ratingB =
+                b['average_rating'] != null
+                    ? double.tryParse(b['average_rating'].toString()) ?? 0.0
+                    : 0.0;
+            return ratingB.compareTo(ratingA);
+          });
+          break;
+      }
+    }
+
+    return filteredList;
+  }
+
+  void _showFilterBottomSheet(BuildContext context) {
+    // Create a local copy of the price range for the sheet
+    RangeValues localPriceRange = RangeValues(
+      _priceRange.start,
+      _priceRange.end,
+    );
+    Map<String, dynamic> localFilters = Map.from(_activeFilters);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setModalState) => Container(
+                  height: MediaQuery.of(context).size.height * 0.75,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      // Filter Header
+                      Container(
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.grey[300]!,
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Filter Products',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                TextButton(
+                                  onPressed: () {
+                                    setModalState(() {
+                                      localPriceRange = RangeValues(
+                                        0,
+                                        _maxPrice,
+                                      );
+                                      localFilters = {};
+                                    });
+                                  },
+                                  child: Text(
+                                    'Reset',
+                                    style: TextStyle(color: Colors.red[600]),
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    // Update active filters with the local state from the modal
+                                    setState(() {
+                                      _activeFilters = Map.from(localFilters);
+                                      _activeFilters['price'] = localPriceRange;
+                                      _priceRange = localPriceRange;
+                                    });
+                                    _applyFilters();
+                                    Navigator.pop(context);
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.teal[600],
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ),
+                                  child: Text('Apply'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Filter Content
+                      Expanded(
+                        child: ListView(
+                          padding: EdgeInsets.all(16),
+                          children: [
+                            // Price Range Filter
+                            Text(
+                              'Price Range',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '₹${localPriceRange.start.toInt()}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                Text(
+                                  '₹${localPriceRange.end.toInt()}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            RangeSlider(
+                              values: localPriceRange,
+                              min: 0,
+                              max: _maxPrice,
+                              divisions: 20,
+                              activeColor: Colors.teal[600],
+                              inactiveColor: Colors.grey[300],
+                              labels: RangeLabels(
+                                '₹${localPriceRange.start.toInt()}',
+                                '₹${localPriceRange.end.toInt()}',
+                              ),
+                              onChanged: (RangeValues values) {
+                                setModalState(() {
+                                  localPriceRange = values;
+                                });
+                              },
+                            ),
+
+                            Divider(height: 24),
+
+                            // Stock status filter
+                            Text(
+                              'Availability',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                _buildFilterChip(
+                                  setModalState,
+                                  'In Stock',
+                                  'stock',
+                                  'instock',
+                                  localFilters,
+                                  (type, value, checked) {
+                                    if (checked) {
+                                      localFilters[type] = value;
+                                    } else if (localFilters[type] == value) {
+                                      localFilters.remove(type);
+                                    }
+                                  },
+                                ),
+                                _buildFilterChip(
+                                  setModalState,
+                                  'Out of Stock',
+                                  'stock',
+                                  'outofstock',
+                                  localFilters,
+                                  (type, value, checked) {
+                                    if (checked) {
+                                      localFilters[type] = value;
+                                    } else if (localFilters[type] == value) {
+                                      localFilters.remove(type);
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+
+                            Divider(height: 24),
+
+                            // Rating filter
+                            Text(
+                              'Product Rating',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                _buildFilterChip(
+                                  setModalState,
+                                  '4+ Stars',
+                                  'rating',
+                                  '4',
+                                  localFilters,
+                                  (type, value, checked) {
+                                    if (checked) {
+                                      localFilters[type] = value;
+                                    } else if (localFilters[type] == value) {
+                                      localFilters.remove(type);
+                                    }
+                                  },
+                                ),
+                                _buildFilterChip(
+                                  setModalState,
+                                  '3+ Stars',
+                                  'rating',
+                                  '3',
+                                  localFilters,
+                                  (type, value, checked) {
+                                    if (checked) {
+                                      localFilters[type] = value;
+                                    } else if (localFilters[type] == value) {
+                                      localFilters.remove(type);
+                                    }
+                                  },
+                                ),
+                                _buildFilterChip(
+                                  setModalState,
+                                  '2+ Stars',
+                                  'rating',
+                                  '2',
+                                  localFilters,
+                                  (type, value, checked) {
+                                    if (checked) {
+                                      localFilters[type] = value;
+                                    } else if (localFilters[type] == value) {
+                                      localFilters.remove(type);
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ),
+    );
+  }
+
+  Widget _buildFilterChip(
+    StateSetter setState,
+    String label,
+    String filterType,
+    String value,
+    Map<String, dynamic> filters,
+    Function(String, String, bool) onSelected,
+  ) {
+    bool isSelected =
+        filters.containsKey(filterType) && filters[filterType] == value;
+
+    return FilterChip(
+      label: Text(label),
+      selected: isSelected,
+      backgroundColor: Colors.grey[200],
+      selectedColor: Colors.teal[100],
+      checkmarkColor: Colors.teal[700],
+      labelStyle: TextStyle(
+        color: isSelected ? Colors.teal[700] : Colors.grey[800],
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(4),
+        side: BorderSide(
+          color: isSelected ? Colors.teal[600]! : Colors.grey[400]!,
+          width: 1,
+        ),
+      ),
+      onSelected: (bool selected) {
+        setState(() {
+          onSelected(filterType, value, selected);
+        });
+      },
+    );
+  }
+
+  // Sort dropdown widget with fixed width to prevent overflow
+  // Replace the _buildSortDropdown() method with this fixed version:
+  Widget _buildSortDropdown() {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: 4,
+        vertical: 0,
+      ), // Reduced padding
+      constraints: BoxConstraints(maxWidth: 120), // Even smaller max width
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(4),
+        color: Colors.white,
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedSortOption,
+          icon: Icon(
+            Icons.arrow_drop_down,
+            color: Colors.grey[700],
+            size: 14,
+          ), // Smaller dropdown icon
+          style: TextStyle(
+            fontSize: 11, // Smaller font
+            color: Colors.grey[800],
+            fontWeight: FontWeight.w500,
+          ),
+          isDense: true,
+          isExpanded: true,
+          menuMaxHeight: 300, // Limit dropdown menu height
+          onChanged: (String? newValue) {
+            if (newValue != null) {
+              setState(() {
+                _selectedSortOption = newValue;
+              });
+              _applyFilters();
+            }
+          },
+          items:
+              <String>[
+                'Default',
+                'Price: Low-High', // Shortened text
+                'Price: High-Low', // Shortened text
+                'Newest', // Shortened text
+                'Popular', // Shortened text
+              ].map<DropdownMenuItem<String>>((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value, overflow: TextOverflow.ellipsis),
+                );
+              }).toList(),
+        ),
+      ),
+    );
+  }
+
+  // Fixed filter bar with smaller components to prevent overflow
+  Widget _buildFilterBar() {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 8,
+      ), // Further reduced horizontal padding
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 1)),
+      ),
+      child: Row(
+        children: [
+          // Sort Dropdown with Flexible to prevent overflow
+          Flexible(
+            flex: 3, // Give sort dropdown more space
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.sort,
+                  size: 12,
+                  color: Colors.grey[700],
+                ), // Even smaller icon
+                SizedBox(width: 2),
+                Text(
+                  'Sort:',
+                  style: TextStyle(
+                    fontSize: 11, // Smaller text
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                SizedBox(width: 2),
+                Flexible(child: _buildSortDropdown()),
+              ],
+            ),
+          ),
+
+          SizedBox(width: 2), // Minimal spacing
+          // Filter Button
+          Flexible(
+            flex: 2, // Filter button takes less space
+            child: InkWell(
+              onTap: () => _showFilterBottomSheet(context),
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 6,
+                ), // Further reduced padding
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[300]!),
+                  borderRadius: BorderRadius.circular(4),
+                  color:
+                      _activeFilters.isNotEmpty
+                          ? Colors.teal[50]
+                          : Colors.white,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.filter_list,
+                      size: 12, // Smaller icon
+                      color:
+                          _activeFilters.isNotEmpty
+                              ? Colors.teal[700]
+                              : Colors.grey[700],
+                    ),
+                    SizedBox(width: 2),
+                    Text(
+                      'Filter',
+                      style: TextStyle(
+                        fontSize: 11, // Smaller text
+                        fontWeight: FontWeight.w500,
+                        color:
+                            _activeFilters.isNotEmpty
+                                ? Colors.teal[700]
+                                : Colors.grey[700],
+                      ),
+                    ),
+                    if (_activeFilters.isNotEmpty) ...[
+                      SizedBox(width: 2),
+                      Container(
+                        padding: EdgeInsets.all(2), // Smaller padding
+                        decoration: BoxDecoration(
+                          color: Colors.teal[700],
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          _activeFilters.length.toString(),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 8, // Smaller text
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          if (_activeFilters.isNotEmpty ||
+              _selectedSortOption != 'Default') ...[
+            SizedBox(width: 2), // Smaller gap
+            // Flexible(
+            //   flex: 1, // Clear button takes least space
+            //   child: InkWell(
+            //     onTap: _resetFilters,
+            //     child: Container(
+            //       padding: EdgeInsets.symmetric(
+            //         horizontal: 4,
+            //         vertical: 6,
+            //       ), // Minimum padding
+            //       decoration: BoxDecoration(
+            //         border: Border.all(color: Colors.red[300]!),
+            //         borderRadius: BorderRadius.circular(4),
+            //         color: Colors.red[50],
+            //       ),
+            //       child: Text(
+            //         'Clear',
+            //         style: TextStyle(
+            //           fontSize: 11, // Smaller text
+            //           fontWeight: FontWeight.w500,
+            //           color: Colors.red[700],
+            //         ),
+            //       ),
+            //     ),
+            //   ),
+            // ),
+          ],
+        ],
+      ),
+    );
   }
 
   void _addToCart(BuildContext context, dynamic product) {
@@ -360,11 +1010,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                 : null,
         actions: [
           IconButton(
-            icon: Icon(
-              Icons.search,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              size: 28,
-            ),
+            icon: Icon(Icons.search, color: Colors.black, size: 28),
             onPressed: () {
               Navigator.push(
                 context,
@@ -563,57 +1209,8 @@ class _CategoriesScreenState extends State<CategoriesScreen>
             color: Colors.white,
             child: Column(
               children: [
-                // Category Header with classic styling
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border(
-                      bottom: BorderSide(color: Colors.grey[300]!, width: 1),
-                    ),
-                  ),
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          selectedCategoryName,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[800],
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          updateProductsForCategory(
-                            selectedCategoryId,
-                            selectedCategoryName,
-                            viewAll: true,
-                          );
-                        },
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          minimumSize: Size(0, 0),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          "View All",
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.teal[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                // Add filter bar directly (removed category header and View All button)
+                if (!isLoadingProducts) _buildFilterBar(),
 
                 // Products Grid View with classic styling
                 Expanded(
@@ -647,11 +1244,12 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                                 ),
                                 SizedBox(height: 8),
                                 Text(
-                                  'Try selecting a different category',
+                                  'Try selecting a different category or adjusting your filters',
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: Colors.grey[600],
                                   ),
+                                  textAlign: TextAlign.center,
                                 ),
                               ],
                             ),
@@ -661,7 +1259,6 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                             gridDelegate:
                                 SliverGridDelegateWithFixedCrossAxisCount(
                                   crossAxisCount: 2,
-                                  // Adjusted aspect ratio to remove extra space
                                   childAspectRatio: 0.56,
                                   crossAxisSpacing: 10,
                                   mainAxisSpacing: 10,
@@ -686,64 +1283,89 @@ class _CategoriesScreenState extends State<CategoriesScreen>
   Widget _buildAllProductsView() {
     return Container(
       color: Colors.white,
-      child:
-          isLoadingProducts
-              ? Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.teal[600]!),
-                ),
-              )
-              : products.isEmpty
-              ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.inventory_2_outlined,
-                      size: 48,
-                      color: Colors.grey[400],
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'No products found',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                  ],
-                ),
-              )
-              : GridView.builder(
-                controller: _scrollController,
-                padding: EdgeInsets.all(10),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  // Adjusted aspect ratio to remove extra space
-                  childAspectRatio: 0.56,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                ),
-                itemCount:
-                    _isLoadingMore ? products.length + 1 : products.length,
-                itemBuilder: (context, index) {
-                  if (index == products.length && _isLoadingMore) {
-                    return Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.teal[600]!,
-                          ),
-                          strokeWidth: 2.0,
+      child: Column(
+        children: [
+          // Add filter bar at the top
+          if (!isLoadingProducts) _buildFilterBar(),
+
+          // Products List
+          Expanded(
+            child:
+                isLoadingProducts
+                    ? Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.teal[600]!,
                         ),
                       ),
-                    );
-                  }
-                  return _buildClassicProductItem(context, products[index]);
-                },
-              ),
+                    )
+                    : products.isEmpty
+                    ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.inventory_2_outlined,
+                            size: 48,
+                            color: Colors.grey[400],
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'No products found',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Try adjusting your filters',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    )
+                    : GridView.builder(
+                      controller: _scrollController,
+                      padding: EdgeInsets.all(10),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        childAspectRatio: 0.56,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                      ),
+                      itemCount:
+                          _isLoadingMore
+                              ? products.length + 1
+                              : products.length,
+                      itemBuilder: (context, index) {
+                        if (index == products.length && _isLoadingMore) {
+                          return Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.teal[600]!,
+                                ),
+                                strokeWidth: 2.0,
+                              ),
+                            ),
+                          );
+                        }
+                        return _buildClassicProductItem(
+                          context,
+                          products[index],
+                        );
+                      },
+                    ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -881,9 +1503,8 @@ class _CategoriesScreenState extends State<CategoriesScreen>
               ],
             ),
 
-            // Product Details section - REDUCED BOTTOM PADDING
+            // Product Details section
             Padding(
-              // Reduced bottom padding to remove extra space
               padding: EdgeInsets.fromLTRB(8, 8, 8, 2),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -902,7 +1523,6 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                     overflow: TextOverflow.ellipsis,
                   ),
 
-                  // Very minimal space - similar to screenshot
                   SizedBox(height: 2),
 
                   // Price Display
@@ -930,7 +1550,6 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                     ],
                   ),
 
-                  // Reduced spacing between price and bottom controls
                   SizedBox(height: 4),
 
                   // Stock status and Add to Cart row
@@ -968,7 +1587,6 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                         onTap:
                             inStock ? () => _addToCart(context, product) : null,
                         child: Container(
-                          // Adjusted padding to match screenshot
                           padding: EdgeInsets.symmetric(
                             horizontal: 8,
                             vertical: 3,
