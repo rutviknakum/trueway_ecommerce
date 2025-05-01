@@ -1093,7 +1093,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
         // Left side: Categories list with classic styling
         Container(
           width: 100,
-          color: Colors.grey[50],
+          color: Colors.transparent,
           child: ListView.builder(
             padding: EdgeInsets.symmetric(vertical: 10),
             itemCount: categories.length,
