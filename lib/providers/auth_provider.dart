@@ -287,6 +287,7 @@ class AuthProvider extends ChangeNotifier {
         mobile,
         email,
         password,
+        '', // Add the missing argument (e.g., an empty string or appropriate value)
       );
 
       if (response['success'] == true) {

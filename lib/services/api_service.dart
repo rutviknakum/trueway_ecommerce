@@ -57,6 +57,11 @@ class ApiService {
     // If we have nothing or have both email and ID, we're good
   }
 
+  // Forgot password service delegation
+  Future<Map<String, dynamic>> requestPasswordReset(String email) async {
+    return await _authService.requestPasswordReset(email);
+  }
+
   // Auth service delegation
   Future<Map<String, dynamic>> login(String email, String password) async {
     return await _authService.login(email, password);
@@ -75,6 +80,7 @@ class ApiService {
     String mobile,
     String email,
     String password,
+    String postalCode,
   ) async {
     return await _authService.signupBasic(
       firstName,

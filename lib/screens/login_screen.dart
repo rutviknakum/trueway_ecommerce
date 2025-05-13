@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:trueway_ecommerce/screens/forgot_password_screen.dart';
 import 'package:trueway_ecommerce/screens/main_screen.dart';
 import 'package:trueway_ecommerce/screens/signup_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -210,6 +211,28 @@ class _LoginScreenState extends State<LoginScreen> {
                       return null;
                     },
                   ),
+                  SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ForgotPasswordScreen(),
+                          ),
+                        );
+                      },
+                      child: Text(
+                        "Forgot Password?",
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 10),
                   SizedBox(height: 20),
                   _isLoading
                       ? CircularProgressIndicator()

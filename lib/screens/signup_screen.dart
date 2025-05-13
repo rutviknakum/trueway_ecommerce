@@ -68,6 +68,7 @@ class _SignupScreenState extends State<SignupScreen> {
           mobile,
           email,
           password,
+          confirmPasswordController.text, // Added the missing argument
         );
 
         print("Signup response: $response");
