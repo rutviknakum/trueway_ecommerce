@@ -14,6 +14,8 @@ PODS:
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
+  - permission_handler_apple (9.3.0):
+    - Flutter
   - razorpay-pod (1.4.0)
   - razorpay_flutter (1.1.10):
     - Flutter
@@ -33,6 +35,7 @@ DEPENDENCIES:
   - geolocator_apple (from `.symlinks/plugins/geolocator_apple/darwin`)
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
+  - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
   - razorpay_flutter (from `.symlinks/plugins/razorpay_flutter/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - sqflite_darwin (from `.symlinks/plugins/sqflite_darwin/darwin`)
@@ -56,6 +59,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/image_picker_ios/ios"
   path_provider_foundation:
     :path: ".symlinks/plugins/path_provider_foundation/darwin"
+  permission_handler_apple:
+    :path: ".symlinks/plugins/permission_handler_apple/ios"
   razorpay_flutter:
     :path: ".symlinks/plugins/razorpay_flutter/ios"
   shared_preferences_foundation:
@@ -71,6 +76,7 @@ SPEC CHECKSUMS:
   geolocator_apple: ab36aa0e8b7d7a2d7639b3b4e48308394e8cef5e
   image_picker_ios: 7fe1ff8e34c1790d6fff70a32484959f563a928a
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
+  permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
   razorpay-pod: cb5b5439697bdda9c57d68a92b3e5b0ce1d2f2f3
   razorpay_flutter: 0e98e4fcaae27ad50e011d85f66d85e0a008754a
   shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7

@@ -108,7 +108,7 @@ class AuthService {
     }
   }
 
-  // Server-first signup approach
+  // Server-only signup approach
   Future<Map<String, dynamic>> signupBasic(
     String firstName,
     String lastName,
@@ -133,18 +133,12 @@ class AuthService {
         final loginResult = await loginWithServer(email, password);
 
         if (loginResult['success']) {
-          // Update the user data with the provided information
+          // User already exists and we've logged them in
           final fullName = "$firstName $lastName";
-          await _storage.setUserName(fullName);
-          await _storage.setUserFirstName(firstName);
-          await _storage.setUserLastName(lastName);
-          await _storage.setUserPhone(mobile);
-          await _storage.setUserEmail(email);
-          await _storage.setIsLocalUser(false);
-
+          print("Email already exists, login successful for: $email");
           return {
             "success": true,
-            "message": "Logged in successfully",
+            "message": "Logged in as existing user",
             "email": email,
             "name": fullName,
           };
@@ -170,46 +164,34 @@ class AuthService {
       );
 
       if (serverResult) {
-        // Server registration successful, log in
-        print("Server registration successful, attempting login");
+        // Server registration succeeded, now log in with the new credentials
+        final loginResult = await loginWithServer(email, password);
 
-        // Wait briefly for server to process the registration
-        await Future.delayed(Duration(milliseconds: 500));
-
-        final loginAfterRegister = await loginWithServer(email, password);
-        if (loginAfterRegister['success']) {
+        if (loginResult['success']) {
+          final fullName = "$firstName $lastName";
+          print("New server user registered and logged in: $email");
           return {
             "success": true,
-            "message": "Account created successfully on server",
+            "message": "Account created successfully",
             "email": email,
-            "name": "$firstName $lastName",
-            "local_only": false,
+            "name": fullName,
           };
         } else {
-          // Registration seemed to succeed but login failed - this is odd
-          print(
-            "Warning: User created on server but login failed. Login error: ${loginAfterRegister['error']}",
-          );
-
-          // Create a temporary local user as a fallback
-          return await _createLocalUserAsFallback(
-            firstName,
-            lastName,
-            mobile,
-            email,
-            password,
-          );
+          // This is odd - registration succeeded but login failed
+          print("WARNING: Registration succeeded but login failed");
+          return {
+            "success": false,
+            "error":
+                "Account created but login failed. Please try logging in manually.",
+          };
         }
       } else {
-        // Server registration failed, create local user as fallback
-        print("Server registration failed, creating local user as fallback");
-        return await _createLocalUserAsFallback(
-          firstName,
-          lastName,
-          mobile,
-          email,
-          password,
-        );
+        // Server registration failed, but we no longer create local users
+        print("Server registration failed, returning error to user");
+        return {
+          "success": false,
+          "error": "Server registration failed. Please try again later or check your internet connection.",
+        };
       }
     } catch (e) {
       print("Signup exception: $e");
@@ -221,59 +203,7 @@ class AuthService {
     }
   }
 
-  // Create local user as fallback when server registration fails
-  Future<Map<String, dynamic>> _createLocalUserAsFallback(
-    String firstName,
-    String lastName,
-    String mobile,
-    String email,
-    String password,
-  ) async {
-    // Generate a unique user ID based on the email
-    final userId = email.hashCode.toString();
-    final fullName = "$firstName $lastName";
-
-    // Save all user data
-    await _storage.setUserEmail(email);
-    await _storage.setUserName(fullName);
-    await _storage.setUserFirstName(firstName);
-    await _storage.setUserLastName(lastName);
-    await _storage.setUserPhone(mobile);
-    await _storage.setUserId(userId);
-    await _storage.setCurrentUserId(userId);
-
-    // Store the complete user data in one go
-    final userData = {
-      "user_id": userId,
-      "email": email,
-      "name": fullName,
-      "first_name": firstName,
-      "last_name": lastName,
-      "phone": mobile,
-      "auth_type": "local",
-    };
-    await _storage.updateUserData(userData);
-
-    // Store the password securely
-    await _storage.setLocalUserPassword(password);
-
-    // Set a flag indicating this is a locally registered user
-    await _storage.setIsLocalUser(true);
-
-    // Mark the user as logged in
-    _authToken = "local_auth_$userId"; // Pseudo token
-    await _storage.setAuthToken(_authToken!);
-
-    print("Local user registration (fallback) successful: $userId - $fullName");
-
-    return {
-      "success": true,
-      "message": "Account created locally (server registration failed)",
-      "email": email,
-      "name": fullName,
-      "local_only": true,
-    };
-  }
+  // Server registration methods are defined below
 
   // Improved server registration with aggressive multi-attempt approach
   Future<bool> _attemptServerRegistration(
