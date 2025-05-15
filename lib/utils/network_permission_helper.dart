@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Helper class to handle iOS local network permission requests
 /// This is specifically needed for Flutter debug mode to allow
@@ -8,11 +9,37 @@ import 'package:flutter/foundation.dart';
 class NetworkPermissionHelper {
   /// Flag to track if we've already attempted to trigger the dialog
   static bool _hasTriggeredDialog = false;
+  
+  /// Preference key to store permission granted status
+  static const String _permissionGrantedKey = 'network_permission_granted';
+
+  /// Checks if the user has previously indicated they've granted the permission
+  static Future<bool> hasGrantedPermission() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_permissionGrantedKey) ?? false;
+  }
+  
+  /// Marks that the user has granted network permission
+  static Future<void> markPermissionGranted() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_permissionGrantedKey, true);
+    _hasTriggeredDialog = true;
+  }
 
   /// Attempts multiple approaches to trigger the iOS local network permission dialog
   static Future<void> triggerLocalNetworkPermissionDialog() async {
-    // Only run on iOS and only once per app session
-    if (!Platform.isIOS || _hasTriggeredDialog) return;
+    // Only run on iOS
+    if (!Platform.isIOS) return;
+    
+    // Check if permission is already granted
+    final hasPermission = await hasGrantedPermission();
+    if (hasPermission) {
+      debugPrint('Network permission already granted, skipping dialog');
+      return;
+    }
+    
+    // Only trigger once per app session if not granted
+    if (_hasTriggeredDialog) return;
     _hasTriggeredDialog = true;
     
     // First approach: Bind to localhost with different ports
@@ -70,8 +97,10 @@ class NetworkPermissionHelper {
     }
   }
   
-  /// Call this if you need to manually reset the trigger status
-  static void reset() {
+  /// Call this if you need to manually reset the permission status
+  static Future<void> reset() async {
     _hasTriggeredDialog = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_permissionGrantedKey);
   }
 }

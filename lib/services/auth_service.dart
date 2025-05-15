@@ -214,26 +214,16 @@ class AuthService {
     String password,
   ) async {
     try {
-      // Using multiple valid postal codes to ensure one works
-      final validPostalCodes = [
-        "382421",
-        "380001",
-        "380015",
-        "382424",
-        "380005",
-      ];
-      String validPostalCode = validPostalCodes[0]; // Start with first one
-
       print("IMPORTANT DEBUG - Registration attempt for: $email");
 
-      // First try - WooCommerce API with minimal payload
-      print("Trying WooCommerce API registration with minimal payload");
+      // First try - WooCommerce API with fixed postcode format
+      print("Trying WooCommerce API registration with modified payload");
       final customerUrl = Uri.parse(
         "${ApiConfig.baseUrl}${ApiConfig.customersEndpoint}?consumer_key=${ApiConfig.consumerKey}&consumer_secret=${ApiConfig.consumerSecret}",
       );
 
-      // Create an absolute minimal payload first to avoid validation issues
-      final minimalPayload = {
+      // Create a payload with explicit postcode properties to address the billing_postcode_error
+      final enhancedPayload = {
         "email": email,
         "username": email,
         "password": password,
@@ -244,101 +234,179 @@ class AuthService {
           "last_name": lastName,
           "email": email,
           "phone": mobile,
-          "postcode": validPostalCode,
+          "address_1": "123 Any Street",
+          "city": "Ahmedabad",
+          "state": "Gujarat",
+          "country": "IN",
+          "postcode": "380015",
         },
+        "shipping": {
+          "first_name": firstName,
+          "last_name": lastName,
+          "address_1": "123 Any Street",
+          "city": "Ahmedabad",
+          "state": "Gujarat",
+          "country": "IN",
+          "postcode": "380015",
+        },
+        // Add additional fields that might be required
+        "billing_postcode": "380015",
+        "shipping_postcode": "380015",
+        // Add meta data for custom fields
+        "meta_data": [
+          {"key": "billing_postcode", "value": "380015"},
+          {"key": "_billing_postcode", "value": "380015"},
+          {"key": "shipping_postcode", "value": "380015"},
+          {"key": "_shipping_postcode", "value": "380015"},
+        ],
       };
 
-      print("Minimal payload: ${json.encode(minimalPayload)}");
+      print("Enhanced payload: ${json.encode(enhancedPayload)}");
 
       var wooResponse = await http.post(
         customerUrl,
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode(minimalPayload),
+        body: jsonEncode(enhancedPayload),
       );
 
       print("First attempt response: ${wooResponse.statusCode}");
       print("Response body: ${wooResponse.body}");
 
       if (wooResponse.statusCode == 201 || wooResponse.statusCode == 200) {
-        print("Success with minimal payload!");
+        print("Success with enhanced payload!");
         return true;
       }
 
-      // Second try - Loop through different postal codes
-      for (int i = 1; i < validPostalCodes.length; i++) {
-        validPostalCode = validPostalCodes[i];
-        print("Trying with different postal code: $validPostalCode");
-
-        final fullPayload = {
-          "email": email,
-          "first_name": firstName,
-          "last_name": lastName,
-          "username": email,
-          "password": password,
-          "billing": {
-            "first_name": firstName,
-            "last_name": lastName,
-            "email": email,
-            "phone": mobile,
-            "address_1": "123 Main Street",
-            "city": "Ahmedabad",
-            "state": "Gujarat",
-            "postcode": validPostalCode,
-            "country": "IN",
-          },
-          "shipping": {
-            "first_name": firstName,
-            "last_name": lastName,
-            "address_1": "123 Main Street",
-            "city": "Ahmedabad",
-            "state": "Gujarat",
-            "postcode": validPostalCode,
-            "country": "IN",
-          },
-        };
-
-        wooResponse = await http.post(
-          customerUrl,
-          headers: {"Content-Type": "application/json"},
-          body: jsonEncode(fullPayload),
-        );
-
-        print("Attempt #${i + 1} response: ${wooResponse.statusCode}");
-        print("Response body: ${wooResponse.body}");
-
-        if (wooResponse.statusCode == 201 || wooResponse.statusCode == 200) {
-          print("Success with postal code: $validPostalCode");
-          return true;
-        }
+      // Try to parse the error response to understand what's wrong
+      try {
+        final errorData = json.decode(wooResponse.body);
+        print("Error details: ${errorData['message'] ?? 'Unknown error'}");
+      } catch (e) {
+        print("Could not parse error response: $e");
       }
 
-      // Third try - Use a direct REST API endpoint
-      print("Trying alternative WooCommerce endpoint");
-      final directUrl = Uri.parse(
-        "${ApiConfig.baseUrl}/wp-json/wc/v3/customers/direct-register?consumer_key=${ApiConfig.consumerKey}&consumer_secret=${ApiConfig.consumerSecret}",
-      );
-
-      final directResponse = await http.post(
-        directUrl,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "email": email,
-          "password": password,
-          "username": email,
+      // Second attempt with adjusted fields based on error feedback
+      final secondPayload = {
+        "email": email,
+        "username": email,
+        "password": password,
+        "first_name": firstName,
+        "last_name": lastName,
+        "role": "customer",
+        "billing": {
           "first_name": firstName,
           "last_name": lastName,
+          "company": "",
+          "email": email,
+          "phone": mobile,
+          "address_1": "123 Main Street",
+          "address_2": "",
+          "city": "Ahmedabad",
+          "state": "GJ",
+          "postcode": "380015",
+          "country": "IN",
+        },
+        "shipping": {
+          "first_name": firstName,
+          "last_name": lastName,
+          "company": "",
+          "address_1": "123 Main Street",
+          "address_2": "",
+          "city": "Ahmedabad",
+          "state": "GJ",
+          "postcode": "380015",
+          "country": "IN",
+        },
+        // Try with numeric postcode instead of string
+        "meta_data": [
+          {"key": "billing_postcode", "value": 380015},
+          {"key": "_billing_postcode", "value": 380015},
+        ]
+      };
+
+      print("Second attempt with adjusted payload");
+      wooResponse = await http.post(
+        customerUrl,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(secondPayload),
+      );
+
+      print("Second attempt response: ${wooResponse.statusCode}");
+      print("Response body: ${wooResponse.body}");
+
+      if (wooResponse.statusCode == 201 || wooResponse.statusCode == 200) {
+        print("Success with second attempt payload!");
+        return true;
+      }
+
+      // Third attempt - try with a completely different approach
+      print("Trying alternative approach with simplified payload");
+      final simplifiedPayload = {
+        "email": email,
+        "username": email,
+        "password": password,
+        "first_name": firstName,
+        "last_name": lastName,
+        "billing": {
+          "first_name": firstName,
+          "last_name": lastName,
+          "email": email,
+          "phone": mobile,
+          "address_1": "123 Main Street",
+          "city": "Ahmedabad",
+          "state": "Gujarat",
+          "country": "IN",
+          // Try with zip code format that might be required by server validation
+          "postcode": "38xxxx", // Intentionally invalid to see if format matters
+        },
+      };
+
+      wooResponse = await http.post(
+        customerUrl,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(simplifiedPayload),
+      );
+
+      print("Third attempt response: ${wooResponse.statusCode}");
+      print("Response body: ${wooResponse.body}");
+
+      if (wooResponse.statusCode == 201 || wooResponse.statusCode == 200) {
+        print("Success with simplified payload!");
+        return true;
+      }
+
+      // Skip to traditional WordPress registration
+      print("Trying WordPress user API directly");
+      final wordpressUrl = Uri.parse(
+        "${ApiConfig.baseUrl}/wp/v2/users?context=edit",
+      );
+
+      // Create basic authentication header
+      final authString = base64Encode(utf8.encode('${ApiConfig.consumerKey}:${ApiConfig.consumerSecret}'));
+
+      final wordpressResponse = await http.post(
+        wordpressUrl,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Basic $authString"
+        },
+        body: jsonEncode({
+          "username": email,
+          "email": email,
+          "password": password,
+          "first_name": firstName,
+          "last_name": lastName,
+          "roles": ["customer"],
         }),
       );
 
-      print("Direct endpoint response: ${directResponse.statusCode}");
-      print("Direct endpoint body: ${directResponse.body}");
+      print("WordPress API response: ${wordpressResponse.statusCode}");
+      print("WordPress API body: ${wordpressResponse.body}");
 
-      if (directResponse.statusCode >= 200 && directResponse.statusCode < 300) {
-        print("Success with direct endpoint!");
+      if (wordpressResponse.statusCode >= 200 && wordpressResponse.statusCode < 300) {
+        print("Success with WordPress direct user creation!");
         return true;
       }
-
-      // Fourth try - Traditional WordPress registration
       print("Trying WordPress user API");
       final wpUrl = Uri.parse("${ApiConfig.baseUrl}/wp-json/wp/v2/users");
 
@@ -373,29 +441,50 @@ class AuthService {
         return true;
       }
 
-      // Final attempt - Try a public endpoint if available
-      print("Trying JWT registration endpoint");
-      final jwtRegisterUrl = Uri.parse(
-        "${ApiConfig.baseUrl}/wp-json/jwt-auth/v1/register",
-      );
-
-      final jwtResponse = await http.post(
-        jwtRegisterUrl,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "username": email,
-          "email": email,
-          "password": password,
-          "name": "$firstName $lastName",
-        }),
-      );
-
-      print("JWT register response: ${jwtResponse.statusCode}");
-      print("JWT register body: ${jwtResponse.body}");
-
-      if (jwtResponse.statusCode >= 200 && jwtResponse.statusCode < 300) {
-        print("Success with JWT register!");
-        return true;
+      // Last attempt - Try basic user creation via WP REST API with authentication
+      print("Trying basic user creation via REST API");
+      
+      try {
+        // Use WP REST API with authentication to create a user
+        final wpRestUrl = Uri.parse("${ApiConfig.baseUrl}/wp-json/wp/v2/users");
+        
+        // Get authentication headers with consumer key/secret
+        final authString = base64Encode(utf8.encode('${ApiConfig.consumerKey}:${ApiConfig.consumerSecret}'));
+        
+        final response = await http.post(
+          wpRestUrl,
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Basic $authString"
+          },
+          body: jsonEncode({
+            "username": email,
+            "email": email,
+            "password": password,
+            "name": "$firstName $lastName",
+            "first_name": firstName,
+            "last_name": lastName,
+            "roles": ["customer"],
+            "meta": {
+              "billing_first_name": firstName,
+              "billing_last_name": lastName,
+              "billing_email": email,
+              "billing_phone": mobile
+            }
+          }),
+        );
+        
+        print("WP REST API response: ${response.statusCode}");
+        if (response.statusCode != 404) {
+          print("WP REST API response body: ${response.body}");
+        }
+        
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          print("Success with WP REST API!");
+          return true;
+        }
+      } catch (e) {
+        print("Error with WP REST API: $e");
       }
 
       print("All registration attempts failed");
