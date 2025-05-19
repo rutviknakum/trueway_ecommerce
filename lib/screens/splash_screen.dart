@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:trueway_ecommerce/providers/auth_provider.dart';
 import 'package:trueway_ecommerce/screens/onboarding_screen.dart';
 import 'package:trueway_ecommerce/screens/main_screen.dart';
+import 'package:trueway_ecommerce/screens/login_screen.dart';
+import 'package:trueway_ecommerce/utils/onboarding_manager.dart';
 
 class SplashScreen extends StatefulWidget {
   @override
@@ -21,18 +23,30 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _checkAuthAndNavigate() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final hasSeenOnboarding = await OnboardingManager.hasSeenOnboarding();
 
-    // If user is logged in, go to main screen
+    // First, check if the user has seen the onboarding
+    if (!hasSeenOnboarding) {
+      // First time user, show onboarding regardless of login status
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => OnboardingScreen()),
+      );
+      return;
+    }
+    
+    // User has seen onboarding before
     if (authProvider.isLoggedIn) {
+      // User is logged in, go directly to main screen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => MainScreen()),
       );
     } else {
-      // If not logged in, go to onboarding screen
+      // User has seen onboarding but is not logged in (or logged out), go to login screen
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => OnboardingScreen()),
+        MaterialPageRoute(builder: (context) => LoginScreen()),
       );
     }
   }

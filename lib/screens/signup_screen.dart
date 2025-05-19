@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:trueway_ecommerce/screens/login_screen.dart';
 import 'package:trueway_ecommerce/screens/main_screen.dart';
 import 'package:trueway_ecommerce/services/api_service.dart';
+import 'package:trueway_ecommerce/services/debug_auth_service.dart';
 import 'package:trueway_ecommerce/utils/Theme_Config.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -37,6 +38,20 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
+  // Debug mode toggle for troubleshooting server issues
+  bool _debugMode = false;
+
+  void _toggleDebugMode() {
+    setState(() {
+      _debugMode = !_debugMode;
+    });
+    
+    if (_debugMode) {
+      // Run diagnostics when debug mode is enabled
+      DebugAuthService.runDiagnostics(context);
+    }
+  }
+  
   void _signup() async {
     // Clear any previous errors
     setState(() {
@@ -61,14 +76,49 @@ class _SignupScreenState extends State<SignupScreen> {
           "Attempting signup with: FirstName=$firstName, LastName=$lastName, Mobile=$mobile, Email=$email, Password length=${password.length}",
         );
 
-        // Try the new simplified signup method
+        // Try the direct registration approach first if in debug mode
+        if (_debugMode) {
+          print("Attempting direct server registration through debug service...");
+          final directSuccess = await DebugAuthService.testDirectRegistration(
+            email, 
+            password,
+            firstName,
+            lastName,
+            mobile
+          );
+          
+          if (directSuccess) {
+            print("Direct registration successful!");
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("Account created successfully via direct registration"),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+            
+            setState(() {
+              _isLoading = false;
+            });
+            
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => LoginScreen()),
+            );
+            return;
+          } else {
+            print("Direct registration failed, falling back to normal approach");
+          }
+        }
+
+        // Standard signup method
         final response = await _apiService.signupBasic(
           firstName,
           lastName,
           mobile,
           email,
           password,
-          confirmPasswordController.text, // Added the missing argument
+          confirmPasswordController.text,
         );
 
         print("Signup response: $response");
@@ -102,13 +152,16 @@ class _SignupScreenState extends State<SignupScreen> {
             );
           }
         } else {
-          // Registration failed
+          // If we're in debug mode, run diagnostics
+          if (_debugMode) {
+            DebugAuthService.runDiagnostics(context);
+          }
+          
+          // Server registration failed, show error message to user
           setState(() {
-            _errorMessage =
-                response['error'] ?? "Registration failed. Please try again.";
+            _errorMessage = response['error'] ?? "Failed to connect to the server. Please check your internet connection and try again later.";
           });
-
-          // Show error as a snackbar too for visibility
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(_errorMessage!),
@@ -120,12 +173,16 @@ class _SignupScreenState extends State<SignupScreen> {
       } catch (e) {
         setState(() {
           _isLoading = false;
-          _errorMessage = "An error occurred. Please check your connection.";
+          _errorMessage = "An unexpected error occurred. Please try again.";
         });
         print("Signup exception: $e");
-
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text("Error: $e"),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
         );
       }
     } else {
@@ -511,7 +568,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                       ),
 
-                  // Login link
+                  // Already have an account? Login
                   TextButton(
                     onPressed: () {
                       Navigator.pop(context);
@@ -519,6 +576,26 @@ class _SignupScreenState extends State<SignupScreen> {
                     child: Text(
                       "Already have an account? Login",
                       style: GoogleFonts.poppins(fontSize: 14),
+                    ),
+                  ),
+                  
+                  // Debug mode toggle button (hidden in production)
+                  GestureDetector(
+                    onLongPress: _toggleDebugMode,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: _debugMode ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.bug_report, size: 16, color: Colors.green),
+                          SizedBox(width: 4),
+                          Text("Debug Mode Active", style: TextStyle(fontSize: 12, color: Colors.green)),
+                          TextButton(
+                            onPressed: () => DebugAuthService.runDiagnostics(context),
+                            child: Text("Run Diagnostics", style: TextStyle(fontSize: 12)),
+                          ),
+                        ],
+                      ) : SizedBox(height: 0),
                     ),
                   ),
                 ],

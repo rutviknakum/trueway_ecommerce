@@ -32,7 +32,7 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
-lib/config/api_config.dart
+# lib/config/api_config.dart  # No longer ignored so we can edit it
 
 # Symbolication related
 app.*.symbols

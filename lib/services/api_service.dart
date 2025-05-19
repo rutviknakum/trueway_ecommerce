@@ -80,8 +80,27 @@ class ApiService {
     String mobile,
     String email,
     String password,
-    String postalCode,
+    String confirmPassword, // Renamed for clarity
   ) async {
+    // First check if passwords match
+    if (password != confirmPassword) {
+      return {
+        "success": false,
+        "error": "Passwords do not match. Please re-enter your password."
+      };
+    }
+    
+    // Perform client-side email validation
+    if (!email.contains('@') || !email.contains('.')) {
+      return {
+        "success": false,
+        "error": "Please enter a valid email address."
+      };
+    }
+    
+    // Log the registration attempt for debugging
+    print("API Service forwarding registration request to Auth Service for: $email");
+    
     return await _authService.signupBasic(
       firstName,
       lastName,

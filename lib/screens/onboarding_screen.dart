@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
+import 'package:trueway_ecommerce/utils/onboarding_manager.dart';
 
 class OnboardingScreen extends StatefulWidget {
   @override
@@ -28,8 +29,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     },
   ];
 
-  void _nextPage() {
+  void _nextPage() async {
     if (_currentPage == onboardingData.length - 1) {
+      // Mark onboarding as seen when user completes it
+      await OnboardingManager.markOnboardingAsSeen();
+      
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => LoginScreen()),
@@ -70,7 +74,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 TextButton(
-                  onPressed: () {
+                  onPressed: () async {
+                    // Mark onboarding as seen when user skips it
+                    await OnboardingManager.markOnboardingAsSeen();
+                    
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(builder: (context) => LoginScreen()),

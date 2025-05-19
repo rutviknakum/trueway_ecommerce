@@ -108,7 +108,7 @@ class AuthService {
     }
   }
 
-  // Server-only signup approach
+  // Server-only signup approach with improved error handling
   Future<Map<String, dynamic>> signupBasic(
     String firstName,
     String lastName,
@@ -124,374 +124,198 @@ class AuthService {
       return {"success": false, "error": "All fields are required"};
     }
 
+    print("======= DIRECT SERVER REGISTRATION ========");
+    print("Registering user directly on server: $email");
+    
     try {
-      // First check if the email already exists
-      final emailExists = await checkEmailExists(email);
-
-      if (emailExists) {
-        // If email exists, try to log in
+      // APPROACH: Direct WooCommerce API Registration
+      // This is the most reliable approach for WooCommerce sites
+      
+      // 1. Create a well-formed URL with authentication
+      final String apiUrl = "${ApiConfig.baseUrl}/wc/v3/customers";
+      final Map<String, String> queryParams = {
+        "consumer_key": ApiConfig.consumerKey,
+        "consumer_secret": ApiConfig.consumerSecret,
+      };
+      
+      final Uri registerUrl = Uri.parse(apiUrl).replace(queryParameters: queryParams);
+      print("Registering at: $registerUrl");
+      
+      // 2. Create a unique username to avoid conflicts
+      final String timestamp = DateTime.now().millisecondsSinceEpoch.toString().substring(7);
+      final String username = "user_$timestamp";
+      print("Generated unique username: $username");
+            // 3. Create a complete customer payload with ALL required fields
+      final Map<String, dynamic> customerData = {
+        "email": email,
+        "username": username,  // Using timestamp-based unique username
+        "password": password,
+        "first_name": firstName,
+        "last_name": lastName,
+        // WooCommerce requires complete billing information
+        "billing": {
+          "first_name": firstName,
+          "last_name": lastName,
+          "company": "NA",
+          "address_1": "123 Main Street",  // Required - more specific address
+          "address_2": "",
+          "city": "Mumbai",               // Required - specific city name
+          "state": "Maharashtra",         // Required - specific state name
+          "postcode": "400001",          // Required - Valid Mumbai postcode
+          "country": "IN",                // Required - India
+          "email": email,
+          "phone": mobile
+        },
+        // WooCommerce requires complete shipping information (same as billing)
+        "shipping": {
+          "first_name": firstName,
+          "last_name": lastName,
+          "company": "NA",
+          "address_1": "123 Main Street",  // Required - more specific address
+          "address_2": "",
+          "city": "Mumbai",               // Required - specific city name
+          "state": "Maharashtra",         // Required - specific state name
+          "postcode": "400001",          // Required - Valid Mumbai postcode
+          "country": "IN"                 // Required - India
+        }
+      };
+      
+      print("Sending registration data: ${jsonEncode(customerData)}");
+      
+      // 4. Send request with a longer timeout
+      final http.Response response = await http.post(
+        registerUrl,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(customerData),
+      ).timeout(const Duration(seconds: 30));
+      
+      print("Server registration response: ${response.statusCode}");
+      print("Response body: ${response.body}");
+      
+      // 5. Process the server response
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        print("✅ SERVER REGISTRATION SUCCESSFUL!");
+        
+        // Parse customer data from response
+        final Map<String, dynamic> userData = jsonDecode(response.body);
+        final int? customerId = userData['id'];
+        
+        // Store customer ID if available
+        if (customerId != null) {
+          await _storage.setCustomerId(customerId);
+          print("Stored customer ID: $customerId");
+        }
+        
+        // Login after registration
         final loginResult = await loginWithServer(email, password);
-
         if (loginResult['success']) {
-          // User already exists and we've logged them in
-          final fullName = "$firstName $lastName";
-          print("Email already exists, login successful for: $email");
           return {
             "success": true,
-            "message": "Logged in as existing user",
+            "message": "Your account has been created successfully!",
+            "customer_id": customerId,
             "email": email,
-            "name": fullName,
+            "name": "$firstName $lastName"
           };
         } else {
-          // Email exists but password doesn't match
+          return {
+            "success": true,
+            "message": "Your account has been created on the server. Please sign in.",
+            "customer_id": customerId
+          };
+        }
+      } 
+      else if (response.body.isNotEmpty) {
+        // Try to parse error information
+        try {
+          final Map<String, dynamic> errorData = jsonDecode(response.body);
+          final String errorCode = errorData['code'] ?? 'unknown_error';
+          final String errorMessage = errorData['message'] ?? 'Unknown error occurred';
+          
+          print("Error code: $errorCode, Message: $errorMessage");
+          
+          // Handle specific error cases
+          if (errorMessage.toLowerCase().contains("already exists") || 
+              errorCode == "registration-error-email-exists") {
+            return {
+              "success": false,
+              "error": "An account with this email already exists. Please log in instead."
+            };
+          }
+          else if (errorCode == "billing_postcode_error") {
+            return {
+              "success": false,
+              "error": "Missing postcode. Please provide a valid zip/postal code."
+            };
+          }
+          else {
+            // Generic error with useful information
+            return {
+              "success": false,
+              "error": "Registration failed: $errorMessage",
+              "server_error_code": errorCode
+            };
+          }
+        } catch (e) {
+          print("Error parsing server response: $e");
           return {
             "success": false,
-            "error":
-                "An account with this email already exists. Please log in instead.",
-            "account_exists": true,
+            "error": "Unable to create your account. The server returned an invalid response."
           };
         }
       }
-
-      // Email doesn't exist, proceed with server registration
-      print("Attempting server registration for new user: $email");
-      final serverResult = await _attemptServerRegistration(
-        firstName,
-        lastName,
-        mobile,
-        email,
-        password,
-      );
-
-      if (serverResult) {
-        // Server registration succeeded, now log in with the new credentials
-        final loginResult = await loginWithServer(email, password);
-
-        if (loginResult['success']) {
-          final fullName = "$firstName $lastName";
-          print("New server user registered and logged in: $email");
-          return {
-            "success": true,
-            "message": "Account created successfully",
-            "email": email,
-            "name": fullName,
-          };
-        } else {
-          // This is odd - registration succeeded but login failed
-          print("WARNING: Registration succeeded but login failed");
-          return {
-            "success": false,
-            "error":
-                "Account created but login failed. Please try logging in manually.",
-          };
-        }
-      } else {
-        // Server registration failed, but we no longer create local users
-        print("Server registration failed, returning error to user");
-        return {
-          "success": false,
-          "error": "Server registration failed. Please try again later or check your internet connection.",
-        };
-      }
-    } catch (e) {
-      print("Signup exception: $e");
+      
+      // Unhandled error case
       return {
         "success": false,
-        "error": "Registration failed. Please check your connection.",
-        "debug_info": "Exception: $e",
+        "error": "We couldn't create your account at this time. Please try again later.",
+        "status_code": response.statusCode
+      };
+    } catch (e) {
+      print("❌ SERVER REGISTRATION ERROR: $e");
+      
+      String errorMessage = "Failed to connect to the registration server.";
+      
+      if (e.toString().contains("SocketException") || 
+          e.toString().contains("Connection refused") || 
+          e.toString().contains("timed out")) {
+        errorMessage = "Cannot connect to the server. Please check your internet connection and try again.";
+      }
+      
+      return {
+        "success": false,
+        "error": errorMessage,
+        "debug_info": e.toString()
       };
     }
   }
 
   // Server registration methods are defined below
 
-  // Improved server registration with aggressive multi-attempt approach
-  Future<bool> _attemptServerRegistration(
-    String firstName,
-    String lastName,
-    String mobile,
-    String email,
-    String password,
-  ) async {
+  // Debug connection to server - use this to check if credentials are valid
+
+  // Debug connection to server - use this to check if credentials are valid
+  Future<Map<String, dynamic>> debugServerConnection() async {
     try {
-      print("IMPORTANT DEBUG - Registration attempt for: $email");
-
-      // First try - WooCommerce API with fixed postcode format
-      print("Trying WooCommerce API registration with modified payload");
-      final customerUrl = Uri.parse(
-        "${ApiConfig.baseUrl}${ApiConfig.customersEndpoint}?consumer_key=${ApiConfig.consumerKey}&consumer_secret=${ApiConfig.consumerSecret}",
-      );
-
-      // Create a payload with explicit postcode properties to address the billing_postcode_error
-      final enhancedPayload = {
-        "email": email,
-        "username": email,
-        "password": password,
-        "first_name": firstName,
-        "last_name": lastName,
-        "billing": {
-          "first_name": firstName,
-          "last_name": lastName,
-          "email": email,
-          "phone": mobile,
-          "address_1": "123 Any Street",
-          "city": "Ahmedabad",
-          "state": "Gujarat",
-          "country": "IN",
-          "postcode": "380015",
-        },
-        "shipping": {
-          "first_name": firstName,
-          "last_name": lastName,
-          "address_1": "123 Any Street",
-          "city": "Ahmedabad",
-          "state": "Gujarat",
-          "country": "IN",
-          "postcode": "380015",
-        },
-        // Add additional fields that might be required
-        "billing_postcode": "380015",
-        "shipping_postcode": "380015",
-        // Add meta data for custom fields
-        "meta_data": [
-          {"key": "billing_postcode", "value": "380015"},
-          {"key": "_billing_postcode", "value": "380015"},
-          {"key": "shipping_postcode", "value": "380015"},
-          {"key": "_shipping_postcode", "value": "380015"},
-        ],
-      };
-
-      print("Enhanced payload: ${json.encode(enhancedPayload)}");
-
-      var wooResponse = await http.post(
-        customerUrl,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(enhancedPayload),
-      );
-
-      print("First attempt response: ${wooResponse.statusCode}");
-      print("Response body: ${wooResponse.body}");
-
-      if (wooResponse.statusCode == 201 || wooResponse.statusCode == 200) {
-        print("Success with enhanced payload!");
-        return true;
-      }
-
-      // Try to parse the error response to understand what's wrong
-      try {
-        final errorData = json.decode(wooResponse.body);
-        print("Error details: ${errorData['message'] ?? 'Unknown error'}");
-      } catch (e) {
-        print("Could not parse error response: $e");
-      }
-
-      // Second attempt with adjusted fields based on error feedback
-      final secondPayload = {
-        "email": email,
-        "username": email,
-        "password": password,
-        "first_name": firstName,
-        "last_name": lastName,
-        "role": "customer",
-        "billing": {
-          "first_name": firstName,
-          "last_name": lastName,
-          "company": "",
-          "email": email,
-          "phone": mobile,
-          "address_1": "123 Main Street",
-          "address_2": "",
-          "city": "Ahmedabad",
-          "state": "GJ",
-          "postcode": "380015",
-          "country": "IN",
-        },
-        "shipping": {
-          "first_name": firstName,
-          "last_name": lastName,
-          "company": "",
-          "address_1": "123 Main Street",
-          "address_2": "",
-          "city": "Ahmedabad",
-          "state": "GJ",
-          "postcode": "380015",
-          "country": "IN",
-        },
-        // Try with numeric postcode instead of string
-        "meta_data": [
-          {"key": "billing_postcode", "value": 380015},
-          {"key": "_billing_postcode", "value": 380015},
-        ]
-      };
-
-      print("Second attempt with adjusted payload");
-      wooResponse = await http.post(
-        customerUrl,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(secondPayload),
-      );
-
-      print("Second attempt response: ${wooResponse.statusCode}");
-      print("Response body: ${wooResponse.body}");
-
-      if (wooResponse.statusCode == 201 || wooResponse.statusCode == 200) {
-        print("Success with second attempt payload!");
-        return true;
-      }
-
-      // Third attempt - try with a completely different approach
-      print("Trying alternative approach with simplified payload");
-      final simplifiedPayload = {
-        "email": email,
-        "username": email,
-        "password": password,
-        "first_name": firstName,
-        "last_name": lastName,
-        "billing": {
-          "first_name": firstName,
-          "last_name": lastName,
-          "email": email,
-          "phone": mobile,
-          "address_1": "123 Main Street",
-          "city": "Ahmedabad",
-          "state": "Gujarat",
-          "country": "IN",
-          // Try with zip code format that might be required by server validation
-          "postcode": "38xxxx", // Intentionally invalid to see if format matters
-        },
-      };
-
-      wooResponse = await http.post(
-        customerUrl,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(simplifiedPayload),
-      );
-
-      print("Third attempt response: ${wooResponse.statusCode}");
-      print("Response body: ${wooResponse.body}");
-
-      if (wooResponse.statusCode == 201 || wooResponse.statusCode == 200) {
-        print("Success with simplified payload!");
-        return true;
-      }
-
-      // Skip to traditional WordPress registration
-      print("Trying WordPress user API directly");
-      final wordpressUrl = Uri.parse(
-        "${ApiConfig.baseUrl}/wp/v2/users?context=edit",
-      );
-
-      // Create basic authentication header
-      final authString = base64Encode(utf8.encode('${ApiConfig.consumerKey}:${ApiConfig.consumerSecret}'));
-
-      final wordpressResponse = await http.post(
-        wordpressUrl,
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Basic $authString"
-        },
-        body: jsonEncode({
-          "username": email,
-          "email": email,
-          "password": password,
-          "first_name": firstName,
-          "last_name": lastName,
-          "roles": ["customer"],
-        }),
-      );
-
-      print("WordPress API response: ${wordpressResponse.statusCode}");
-      print("WordPress API body: ${wordpressResponse.body}");
-
-      if (wordpressResponse.statusCode >= 200 && wordpressResponse.statusCode < 300) {
-        print("Success with WordPress direct user creation!");
-        return true;
-      }
-      print("Trying WordPress user API");
-      final wpUrl = Uri.parse("${ApiConfig.baseUrl}/wp-json/wp/v2/users");
-
-      // Get admin credentials for WordPress API
-      final headers = {
-        "Content-Type": "application/json",
-        "Authorization":
-            "Basic " +
-            base64Encode(
-              utf8.encode(
-                '${ApiConfig.consumerKey}:${ApiConfig.consumerSecret}',
-              ),
-            ),
-      };
-
-      final wpResponse = await http.post(
-        wpUrl,
-        headers: headers,
-        body: jsonEncode({
-          "username": email,
-          "email": email,
-          "password": password,
-          "name": "$firstName $lastName",
-        }),
-      );
-
-      print("WordPress response: ${wpResponse.statusCode}");
-      print("WordPress body: ${wpResponse.body}");
-
-      if (wpResponse.statusCode >= 200 && wpResponse.statusCode < 300) {
-        print("Success with WordPress API!");
-        return true;
-      }
-
-      // Last attempt - Try basic user creation via WP REST API with authentication
-      print("Trying basic user creation via REST API");
+      print("Checking base URL access...");
+      final baseCheck = await http.get(Uri.parse(ApiConfig.baseUrl));
+      print("Base URL response: ${baseCheck.statusCode}");
       
-      try {
-        // Use WP REST API with authentication to create a user
-        final wpRestUrl = Uri.parse("${ApiConfig.baseUrl}/wp-json/wp/v2/users");
-        
-        // Get authentication headers with consumer key/secret
-        final authString = base64Encode(utf8.encode('${ApiConfig.consumerKey}:${ApiConfig.consumerSecret}'));
-        
-        final response = await http.post(
-          wpRestUrl,
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Basic $authString"
-          },
-          body: jsonEncode({
-            "username": email,
-            "email": email,
-            "password": password,
-            "name": "$firstName $lastName",
-            "first_name": firstName,
-            "last_name": lastName,
-            "roles": ["customer"],
-            "meta": {
-              "billing_first_name": firstName,
-              "billing_last_name": lastName,
-              "billing_email": email,
-              "billing_phone": mobile
-            }
-          }),
-        );
-        
-        print("WP REST API response: ${response.statusCode}");
-        if (response.statusCode != 404) {
-          print("WP REST API response body: ${response.body}");
-        }
-        
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          print("Success with WP REST API!");
-          return true;
-        }
-      } catch (e) {
-        print("Error with WP REST API: $e");
+      print("Checking WooCommerce API access...");
+      final customerUrlCheck = Uri.parse(
+        "${ApiConfig.baseUrl}${ApiConfig.customersEndpoint}?consumer_key=${ApiConfig.consumerKey}&consumer_secret=${ApiConfig.consumerSecret}"
+      );
+      final wooCheck = await http.get(customerUrlCheck);
+      print("WooCommerce API response: ${wooCheck.statusCode}");
+      if (wooCheck.statusCode >= 200 && wooCheck.statusCode < 300) {
+        print("WooCommerce API is accessible!");
+        return {"success": true, "message": "Server connection and API credentials are valid"};
+      } else {
+        print("WooCommerce API error: ${wooCheck.body}");
+        return {"success": false, "error": "WooCommerce API returned error: ${wooCheck.statusCode}"};
       }
-
-      print("All registration attempts failed");
-      return false;
     } catch (e) {
-      print("Server registration error: $e");
-      return false;
+      print("Server connection debug error: $e");
+      return {"success": false, "error": "Cannot connect to server: $e"};
     }
   }
 

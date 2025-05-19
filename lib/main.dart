@@ -25,24 +25,28 @@ void main() async {
   // Initialize network permissions - iOS only
   if (Platform.isIOS) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Reset the helper to ensure we start fresh
+      await NetworkPermissionHelper.reset();
+      
       // Give the app a moment to initialize fully before triggering permission dialog
       await Future.delayed(const Duration(seconds: 1));
       
       // Request location permission first to ensure iOS permission system is active
-      await requestLocationPermission();
-      
-      // Pause briefly before triggering network permission
-      await Future.delayed(const Duration(milliseconds: 500));
+      final locationStatus = await requestLocationPermission();
+      debugPrint('Location permission status: $locationStatus');
       
       // Use our comprehensive NetworkPermissionHelper to trigger the dialog
+      // This now handles all the timing and multiple approaches internally
       await NetworkPermissionHelper.triggerLocalNetworkPermissionDialog();
-
-      // Wait a bit for the system dialog to either appear or disappear
-      await Future.delayed(const Duration(seconds: 2));
       
-      // After dialog is triggered, show our custom dialog explaining what to do
-      if (!(await NetworkPermissionHelper.hasGrantedPermission())) {
-        // This should run on a real device/simulator to show the custom dialog
+      // Verify network permission status after attempting to trigger dialog
+      final hasNetworkPermission = await NetworkPermissionHelper.hasGrantedPermission();
+      debugPrint('Network permission appears to be ${hasNetworkPermission ? 'granted' : 'denied'}');
+      
+      // If permission still appears to be denied, show our custom dialog
+      if (!hasNetworkPermission) {
+        debugPrint('Showing custom network permission instruction dialog');
+        await Future.delayed(const Duration(seconds: 1)); // Small delay for stability
         _showNetworkPermissionInstructionDialog();
       }
     });
@@ -80,9 +84,10 @@ void _showNetworkPermissionInstructionDialog() {
             const Text('Please follow these steps:'),
             const SizedBox(height: 8),
             _bulletPoint('1. Tap "Open Settings" below'),
-            _bulletPoint('2. Scroll down to this app'),
-            _bulletPoint('3. Enable "Local Network" permission'),
-            _bulletPoint('4. Return to the app'),
+            _bulletPoint('2. Select Privacy & Security'),
+            _bulletPoint('3. Select Local Network'),
+            _bulletPoint('4. Enable toggle for this app'),
+            _bulletPoint('5. Return to the app and restart'),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(8),
@@ -93,7 +98,7 @@ void _showNetworkPermissionInstructionDialog() {
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'This permission is only needed during development.',
+                      'This permission is only needed during development and debugging.',
                       style: TextStyle(fontSize: 12),
                     ),
                   ),
@@ -118,10 +123,18 @@ void _showNetworkPermissionInstructionDialog() {
             onPressed: () {
               // Close dialog
               Navigator.of(context).pop();
-              // Open settings
+              // Open settings directly to Local Network settings if possible
               openAppSettings();
-              // Mark as granted to avoid showing dialog again
+              // Mark as granted to avoid showing dialog again in this session
               NetworkPermissionHelper.markPermissionGranted();
+              
+              // Show a toast or snackbar to notify user they should restart the app
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Please restart the app after changing permissions'),
+                  duration: Duration(seconds: 5),
+                ),
+              );
             },
           ),
         ],
