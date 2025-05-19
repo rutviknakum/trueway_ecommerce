@@ -22,30 +22,78 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _isLoggedIn = await _apiService.isLoggedIn();
-
-      if (_isLoggedIn) {
-        // Get user from API
-        final apiUser = await _apiService.getCurrentUser();
-        if (apiUser.isNotEmpty) {
-          _currentUser = apiUser;
-
-          // Ensure we have an ID field - map user_id to id if needed
-          if (!_currentUser.containsKey('id') &&
-              _currentUser.containsKey('user_id')) {
-            _currentUser['id'] = _currentUser['user_id'];
-          }
-        }
-
-        // Load saved user data if API didn't return complete information
-        if (_currentUser.isEmpty || !_currentUser.containsKey('email')) {
+      // First check if we have a persistent login token in SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final persistentLogin = prefs.getBool('is_persistent_login') ?? false;
+      
+      if (persistentLogin) {
+        // User has a persistent login, check if we have their data
+        final userId = prefs.getString('current_user_id');
+        
+        if (userId != null && userId.isNotEmpty) {
+          // Set logged in state to true based on persistent login
+          _isLoggedIn = true;
+          
+          // Try to load user data from SharedPreferences
           await _loadSavedUserData();
+          
+          // If we still don't have complete user data, try getting it from API
+          if (_currentUser.isEmpty || !_currentUser.containsKey('email')) {
+            try {
+              final apiUser = await _apiService.getCurrentUser();
+              if (apiUser.isNotEmpty) {
+                _currentUser = apiUser;
+                
+                // Ensure we have an ID field - map user_id to id if needed
+                if (!_currentUser.containsKey('id') &&
+                    _currentUser.containsKey('user_id')) {
+                  _currentUser['id'] = _currentUser['user_id'];
+                }
+                
+                // Update saved user data
+                await _saveUserData(_currentUser);
+              }
+            } catch (apiError) {
+              print('Error getting user data from API: $apiError');
+              // Continue with saved data even if API failed
+            }
+          }
+          
+          // If we have a valid user with at least an ID, consider login successful
+          _isLoggedIn = _currentUser.isNotEmpty && 
+              (_currentUser.containsKey('id') || _currentUser.containsKey('user_id'));
         } else {
-          // Store current user data in SharedPreferences
-          await _saveUserData(_currentUser);
+          // No user ID found, can't restore session
+          _isLoggedIn = false;
+          await prefs.setBool('is_persistent_login', false);
         }
       } else {
-        // Reset user data
+        // No persistent login, check with API as fallback
+        _isLoggedIn = await _apiService.isLoggedIn();
+        
+        if (_isLoggedIn) {
+          // Get user from API
+          final apiUser = await _apiService.getCurrentUser();
+          if (apiUser.isNotEmpty) {
+            _currentUser = apiUser;
+
+            // Ensure we have an ID field - map user_id to id if needed
+            if (!_currentUser.containsKey('id') &&
+                _currentUser.containsKey('user_id')) {
+              _currentUser['id'] = _currentUser['user_id'];
+            }
+            
+            // Store current user data in SharedPreferences
+            await _saveUserData(_currentUser);
+          } else {
+            // Load saved user data if API didn't return complete information
+            await _loadSavedUserData();
+          }
+        }
+      }
+      
+      // If we're not logged in, reset user data
+      if (!_isLoggedIn) {
         _currentUser = {};
       }
     } catch (e) {
@@ -177,6 +225,9 @@ class AuthProvider extends ChangeNotifier {
         // Store email immediately as it's a critical piece of information
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('last_login_email', email);
+        
+        // Set persistent login flag to true
+        await prefs.setBool('is_persistent_login', true);
 
         try {
           // Get current user data from API
@@ -416,6 +467,9 @@ class AuthProvider extends ChangeNotifier {
       // Clear session data
       final prefs = await SharedPreferences.getInstance();
 
+      // Remove persistent login flag
+      await prefs.setBool('is_persistent_login', false);
+      
       // Clear session tracking
       await prefs.remove('current_user_id');
 

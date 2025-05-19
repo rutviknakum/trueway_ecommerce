@@ -16,7 +16,9 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Timer(Duration(seconds: 3), () {
+    // Allow a bit more time for the AuthProvider to initialize properly
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Start checking auth state after the build is complete
       _checkAuthAndNavigate();
     });
   }
@@ -35,7 +37,18 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
     
+    // Wait for authProvider to finish initializing (checking if isLoading is false)
+    // This ensures we have the correct login state before making navigation decisions
+    if (authProvider.isLoading) {
+      // Wait for loading to complete by watching for changes
+      await Future.doWhile(() async {
+        await Future.delayed(Duration(milliseconds: 100));
+        return authProvider.isLoading;
+      });
+    }
+    
     // User has seen onboarding before
+    // Now we can safely check the login status
     if (authProvider.isLoggedIn) {
       // User is logged in, go directly to main screen
       Navigator.pushReplacement(
@@ -55,7 +68,21 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Center(child: Image.asset("assets/images/logo.png", width: 200)),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset("assets/images/logo.png", width: 200),
+            const SizedBox(height: 24),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            const Text(
+              "Starting up...",
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            )
+          ],
+        ),
+      ),
     );
   }
 }
