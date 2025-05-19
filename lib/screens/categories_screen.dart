@@ -1344,9 +1344,9 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                       padding: EdgeInsets.all(10),
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
-                        childAspectRatio: 0.56,
+                        childAspectRatio: 0.6, // Adjusted for more compact cards
                         crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
+                        mainAxisSpacing: 12, // Balanced spacing for visual hierarchy
                       ),
                       itemCount:
                           _isLoadingMore
@@ -1445,43 +1445,62 @@ class _CategoriesScreenState extends State<CategoriesScreen>
               // Product Image with improved styling
               Stack(
                 children: [
-                  // Product Image with better height and display
-                  Container(
-                    width: double.infinity,
-                    height: 140, // Increased height for better presentation
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
-                          blurRadius: 2,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Hero(
-                      tag: 'product_$productId',
-                      child: imageUrl.isNotEmpty
-                          ? Image.network(
-                              imageUrl,
-                              fit: BoxFit.contain, // Changed to contain for better product display
-                              errorBuilder: (context, error, stackTrace) {
-                                return Center(
-                                  child: Icon(
-                                    Icons.image_not_supported_outlined,
-                                    size: 28,
-                                    color: Colors.grey[400],
-                                  ),
-                                );
-                              },
-                            )
-                          : Center(
-                              child: Icon(
-                                Icons.image_not_supported_outlined,
-                                size: 28,
-                                color: Colors.grey[400],
+                  // Product Image with fixed aspect ratio for consistency
+                  AspectRatio(
+                    aspectRatio: 1.0, // Square aspect ratio for consistency
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 2,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Hero(
+                        tag: 'product_$productId',
+                        child: imageUrl.isNotEmpty
+                            ? ClipRRect(
+                                child: Image.network(
+                                  imageUrl,
+                                  fit: BoxFit.contain,
+                                  // Add placeholders to reduce layout shift
+                                  frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                                    if (frame == null) {
+                                      return Container(
+                                        color: Colors.grey[100],
+                                        child: Center(
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.grey[400],
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                    return child;
+                                  },
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Center(
+                                      child: Icon(
+                                        Icons.image_not_supported_outlined,
+                                        size: 28,
+                                        color: Colors.grey[400],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              )
+                            : Center(
+                                child: Icon(
+                                  Icons.image_not_supported_outlined,
+                                  size: 28,
+                                  color: Colors.grey[400],
+                                ),
                               ),
-                            ),
+                      ),
                     ),
                   ),
 
@@ -1554,18 +1573,18 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                 ],
               ),
 
-              // Product Details section with enhanced styling
+              // Product Details section with flexible layout to prevent overflow
               Padding(
-                padding: EdgeInsets.all(12),
+                padding: EdgeInsets.all(8), // Reduced padding to save space
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+                  mainAxisSize: MainAxisSize.min, // Use minimum space needed
                   children: [
-                    // Product Name with better typography
+                    // Product Name with more compact design
                     Text(
                       productName,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13, // Slightly smaller font
                         fontWeight: FontWeight.w500,
                         color: Colors.grey[800],
                         height: 1.2,
@@ -1574,26 +1593,27 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                       overflow: TextOverflow.ellipsis,
                     ),
 
-                    SizedBox(height: 6),
+                    const SizedBox(height: 4), // Reduced spacing
 
                     // Price Display with improved visual hierarchy
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Text(
                           "₹${price.toInt()}",
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 15, // Slightly smaller font
                             fontWeight: FontWeight.bold,
                             color: primaryColor,
                           ),
                         ),
                         if (hasDiscount) ...
                         [
-                          SizedBox(width: 6),
+                          SizedBox(width: 4), // Reduced spacing
                           Text(
                             "₹${regularPrice.toInt()}",
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 11, // Slightly smaller font
                               decoration: TextDecoration.lineThrough,
                               color: Colors.grey[500],
                             ),
@@ -1602,7 +1622,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                       ],
                     ),
 
-                    SizedBox(height: 10),
+                    const SizedBox(height: 6), // Fixed height spacer instead of Spacer
 
                     // Stock status and Add to Cart row with improved UI
                     Row(

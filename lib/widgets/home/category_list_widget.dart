@@ -27,46 +27,62 @@ class _CategoryListWidgetState extends State<CategoryListWidget> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Category section header
+        // Category section header with improved styling
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 'Categories',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
               ),
-              GestureDetector(
-                onTap:
-                    widget.onViewAllTap ??
-                    () {
-                      // Default navigation to all categories screen if no callback provided
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder:
-                              (context) => AllCategoriesScreen(
-                                categories: widget.categories,
-                                onCategoryTap: widget.onCategoryTap,
-                              ),
+              InkWell(
+                onTap: widget.onViewAllTap ?? 
+                  () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AllCategoriesScreen(
+                          categories: widget.categories,
+                          onCategoryTap: widget.onCategoryTap,
                         ),
-                      );
-                    },
-                child: Text(
-                  'View All',
-                  style: TextStyle(fontSize: 14, color: Colors.green),
+                      ),
+                    );
+                  },
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View All',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.green,
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, size: 16, color: Colors.green),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
         ),
-        // Category list
+        // Improved category list with better spacing
         Container(
-          height: 140, // Adequate height to ensure everything fits
+          height: 135, // Optimized height
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: widget.categories.length,
+            physics: BouncingScrollPhysics(),
             padding: EdgeInsets.symmetric(horizontal: 12),
             itemBuilder: (context, index) {
               final category = widget.categories[index];
@@ -80,6 +96,16 @@ class _CategoryListWidgetState extends State<CategoryListWidget> {
 
   Widget _buildCategoryItem(Map<String, dynamic> category, int index) {
     final isSelected = _selectedIndex == index;
+    
+    // Safely extract image URL with proper null handling and type checking
+    String? imageUrl;
+    if (category['image'] != null) {
+      if (category['image'] is Map && category['image']['src'] != null) {
+        imageUrl = category['image']['src'].toString();
+      } else if (category['image'] is String) {
+        imageUrl = category['image'].toString();
+      }
+    }
 
     return GestureDetector(
       onTap: () {
@@ -93,51 +119,38 @@ class _CategoryListWidgetState extends State<CategoryListWidget> {
         }
       },
       child: Container(
-        width: 90, // Wider container for better spacing and text display
-        margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        width: 95, // Slightly wider for better spacing
+        margin: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Square image container
+            // Category image with improved container
             Container(
-              height: 75, // Slightly larger image
-              width: 75, // Slightly larger image
-              margin: EdgeInsets.only(bottom: 8), // Space before text
+              height: 80,
+              width: 80,
+              margin: EdgeInsets.only(bottom: 8),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(4), // Less rounded corners
+                borderRadius: BorderRadius.circular(10),
+                border: isSelected
+                    ? Border.all(color: Colors.green, width: 2)
+                    : Border.all(color: Colors.grey.shade200, width: 1),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.1),
-                    blurRadius: 3,
-                    offset: Offset(0, 1),
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
                   ),
                 ],
-                border:
-                    isSelected
-                        ? Border.all(color: Colors.green, width: 2)
-                        : Border.all(color: Colors.grey.shade200, width: 1),
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child:
-                    category["image"] != null &&
-                            category["image"].toString().isNotEmpty
-                        ? CachedNetworkImage(
-                          imageUrl: category["image"],
-                          fit: BoxFit.cover,
-                          placeholder:
-                              (context, url) => Center(
-                                child: SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.grey[300]!,
-                                    ),
-                                    strokeWidth: 2,
-                                  ),
-                                ),
+                borderRadius: BorderRadius.circular(8),
+                child: imageUrl != null && imageUrl.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
                               ),
                           errorWidget:
                               (context, url, error) => Container(
@@ -195,13 +208,18 @@ class AllCategoriesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('All Categories')),
+      appBar: AppBar(
+        title: Text('All Categories'),
+        elevation: 0.5,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.grey[800],
+      ),
       body: GridView.builder(
-        padding: EdgeInsets.all(8),
+        padding: EdgeInsets.all(12),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: MediaQuery.of(context).size.width > 600 ? 4 : 3,
-          childAspectRatio: 0.85,
-          crossAxisSpacing: 8,
+          crossAxisCount: MediaQuery.of(context).size.width > 600 ? 4 : 2,
+          childAspectRatio: 0.9,
+          crossAxisSpacing: 12,
           mainAxisSpacing: 12,
         ),
         itemCount: categories.length,
@@ -216,76 +234,107 @@ class AllCategoriesScreen extends StatelessWidget {
   Widget _buildGridItem(BuildContext context, Map<String, dynamic> category) {
     // Calculate image size based on screen width
     final screenWidth = MediaQuery.of(context).size.width;
-    final imageSize = (screenWidth / (screenWidth > 600 ? 5 : 4)) - 16;
+    final imageSize = (screenWidth / (screenWidth > 600 ? 5 : 4)) - 20;
+    
+    // Safely extract image URL with proper null handling and type checking
+    String? imageUrl;
+    if (category['image'] != null) {
+      if (category['image'] is Map && category['image']['src'] != null) {
+        imageUrl = category['image']['src'].toString();
+      } else if (category['image'] is String) {
+        imageUrl = category['image'].toString();
+      }
+    }
 
-    return GestureDetector(
-      onTap: () {
-        if (onCategoryTap != null) {
-          onCategoryTap!(category);
-          Navigator.pop(context);
-        }
-      },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            height: imageSize,
-            width: imageSize,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(4),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 2,
-                  offset: Offset(0, 1),
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          if (onCategoryTap != null) {
+            onCategoryTap!(category);
+            Navigator.pop(context);
+          }
+        },
+        child: Padding(
+          padding: EdgeInsets.all(8.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Image Container with improved styling
+              Container(
+                height: imageSize,
+                width: imageSize,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade200, width: 1),
                 ),
-              ],
-              border: Border.all(color: Colors.grey.shade200, width: 1),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child:
-                  category["image"] != null &&
-                          category["image"].toString().isNotEmpty
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(9),
+                  child: imageUrl != null && imageUrl.isNotEmpty
                       ? CachedNetworkImage(
-                        imageUrl: category["image"],
-                        fit: BoxFit.cover,
-                        placeholder:
-                            (context, url) => Center(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: Colors.grey[100],
+                            child: Center(
                               child: SizedBox(
-                                width: 16,
-                                height: 16,
+                                width: 20,
+                                height: 20,
                                 child: CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.grey[300]!,
-                                  ),
                                   strokeWidth: 2,
+                                  color: Colors.grey[400],
                                 ),
                               ),
                             ),
-                        errorWidget:
-                            (context, url, error) => Icon(
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: Colors.grey[100],
+                            child: Center(
+                              child: Icon(
+                                Icons.category,
+                                size: 30,
+                                color: Colors.grey[400],
+                              ),
+                            ),
+                          ),
+                        )
+                      : Container(
+                          color: Colors.grey[100],
+                          child: Center(
+                            child: Icon(
                               Icons.category,
-                              size: 24,
+                              size: 30,
                               color: Colors.grey[400],
                             ),
-                      )
-                      : Icon(Icons.category, size: 24, color: Colors.grey[400]),
-            ),
+                          ),
+                        ),
+                ),
+              ),
+              SizedBox(height: 8),
+              // Text with better styling
+              Container(
+                height: 36, // Fixed height
+                width: double.infinity,
+                child: Center(
+                  child: Text(
+                    category["name"] ?? "Category",
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey[800],
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: 4),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              category["name"] ?? "",
-              style: TextStyle(fontSize: 12),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
