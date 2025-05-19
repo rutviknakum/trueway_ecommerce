@@ -413,6 +413,16 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     return filteredList;
   }
 
+  void _resetFilters() {
+    setState(() {
+      _activeFilters = {};
+      _selectedSortOption = 'Default';
+      _priceRange = RangeValues(0, _maxPrice);
+    });
+    _applyFilters();
+    print('Filters reset');
+  }
+
   void _showFilterBottomSheet(BuildContext context) {
     // Create a local copy of the price range for the sheet
     RangeValues localPriceRange = RangeValues(
@@ -427,8 +437,8 @@ class _CategoriesScreenState extends State<CategoriesScreen>
       backgroundColor: Colors.transparent,
       builder:
           (context) => StatefulBuilder(
-            builder:
-                (context, setModalState) => Container(
+        builder:
+            (context, setModalState) => Container(
                   height: MediaQuery.of(context).size.height * 0.75,
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -746,19 +756,18 @@ class _CategoriesScreenState extends State<CategoriesScreen>
               _applyFilters();
             }
           },
-          items:
-              <String>[
-                'Default',
-                'Price: Low-High', // Shortened text
-                'Price: High-Low', // Shortened text
-                'Newest', // Shortened text
-                'Popular', // Shortened text
-              ].map<DropdownMenuItem<String>>((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value, overflow: TextOverflow.ellipsis),
-                );
-              }).toList(),
+          items: <String>[
+            'Default',
+            'Price: Low to High',
+            'Price: High to Low',
+            'Newest First',
+            'Popularity',
+          ].map<DropdownMenuItem<String>>((String value) {
+            return DropdownMenuItem<String>(
+              value: value,
+              child: Text(value, overflow: TextOverflow.ellipsis),
+            );
+          }).toList(),
         ),
       ),
     );
@@ -872,31 +881,31 @@ class _CategoriesScreenState extends State<CategoriesScreen>
           if (_activeFilters.isNotEmpty ||
               _selectedSortOption != 'Default') ...[
             SizedBox(width: 2), // Smaller gap
-            // Flexible(
-            //   flex: 1, // Clear button takes least space
-            //   child: InkWell(
-            //     onTap: _resetFilters,
-            //     child: Container(
-            //       padding: EdgeInsets.symmetric(
-            //         horizontal: 4,
-            //         vertical: 6,
-            //       ), // Minimum padding
-            //       decoration: BoxDecoration(
-            //         border: Border.all(color: Colors.red[300]!),
-            //         borderRadius: BorderRadius.circular(4),
-            //         color: Colors.red[50],
-            //       ),
-            //       child: Text(
-            //         'Clear',
-            //         style: TextStyle(
-            //           fontSize: 11, // Smaller text
-            //           fontWeight: FontWeight.w500,
-            //           color: Colors.red[700],
-            //         ),
-            //       ),
-            //     ),
-            //   ),
-            // ),
+            Flexible(
+              flex: 1, // Clear button takes least space
+              child: InkWell(
+                onTap: _resetFilters,
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 6,
+                  ), // Minimum padding
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.red[300]!),
+                    borderRadius: BorderRadius.circular(4),
+                    color: Colors.red[50],
+                  ),
+                  child: Text(
+                    'Clear',
+                    style: TextStyle(
+                      fontSize: 11, // Smaller text
+                      fontWeight: FontWeight.w500,
+                      color: Colors.red[700],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ],
       ),
@@ -1370,10 +1379,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
   }
 
   Widget _buildClassicProductItem(BuildContext context, dynamic product) {
-    final wishlistProvider = Provider.of<WishlistProvider>(
-      context,
-      listen: false,
-    );
+    final wishlistProvider = Provider.of<WishlistProvider>(context, listen: false);
 
     int productId;
     if (product["id"] is int) {
@@ -1385,7 +1391,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     }
 
     final productName = product["name"]?.toString() ?? 'No Name';
-    wishlistProvider.isWishlisted(productId);
+    final isWishlisted = wishlistProvider.isWishlisted(productId);
 
     final String priceStr = product['price']?.toString() ?? '0';
     final String regularPriceStr = product['regular_price']?.toString() ?? '0';
@@ -1393,8 +1399,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     final regularPrice = double.tryParse(regularPriceStr) ?? 0.0;
 
     final hasDiscount = regularPrice > 0 && regularPrice != price;
-    final discountPercentage =
-        hasDiscount ? ((regularPrice - price) / regularPrice) * 100 : 0;
+    final discountPercentage = hasDiscount ? ((regularPrice - price) / regularPrice) * 100 : 0;
 
     String imageUrl = '';
     if (product['images'] != null &&
@@ -1406,233 +1411,272 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     }
 
     final bool inStock = product['in_stock'] ?? true;
+    final Color primaryColor = Colors.teal[700]!;
 
-    // Classic product card with border and subtle shadows
+    // Enhanced modern product card with smooth shadows and depth
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border.all(color: Colors.grey[300]!, width: 1),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 2,
-            offset: Offset(0, 1),
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: Offset(0, 3),
           ),
         ],
       ),
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ProductDetailsScreen(product: product),
-            ),
-          );
-        },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Product Image with classic frame styling
-            Stack(
-              children: [
-                // Product Image
-                Container(
-                  width: double.infinity,
-                  height: 110,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    border: Border(
-                      bottom: BorderSide(color: Colors.grey[300]!, width: 1),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProductDetailsScreen(product: product),
+              ),
+            );
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Product Image with improved styling
+              Stack(
+                children: [
+                  // Product Image with better height and display
+                  Container(
+                    width: double.infinity,
+                    height: 140, // Increased height for better presentation
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.03),
+                          blurRadius: 2,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
                     ),
-                  ),
-                  child: Hero(
-                    tag: 'product_$productId',
-                    child:
-                        imageUrl.isNotEmpty
-                            ? Image.network(
+                    child: Hero(
+                      tag: 'product_$productId',
+                      child: imageUrl.isNotEmpty
+                          ? Image.network(
                               imageUrl,
-                              fit: BoxFit.cover,
+                              fit: BoxFit.contain, // Changed to contain for better product display
                               errorBuilder: (context, error, stackTrace) {
                                 return Center(
                                   child: Icon(
-                                    Icons.image_not_supported,
-                                    size: 24,
+                                    Icons.image_not_supported_outlined,
+                                    size: 28,
                                     color: Colors.grey[400],
                                   ),
                                 );
                               },
                             )
-                            : Center(
+                          : Center(
                               child: Icon(
-                                Icons.image_not_supported,
-                                size: 24,
+                                Icons.image_not_supported_outlined,
+                                size: 28,
                                 color: Colors.grey[400],
                               ),
                             ),
+                    ),
                   ),
-                ),
 
-                // Classic ribbon-style discount label
-                if (hasDiscount)
+                  // Improved discount badge with modern design
+                  if (hasDiscount)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.red[600],
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black26,
+                              blurRadius: 3,
+                              offset: Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          "-${discountPercentage.toStringAsFixed(0)}%",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ),
+                    
+                  // Wishlist button in corner
                   Positioned(
                     top: 8,
-                    right: 0,
+                    right: 8,
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.red[700],
+                        color: Colors.white.withOpacity(0.9),
+                        shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 2,
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 3,
                             offset: Offset(0, 1),
                           ),
                         ],
                       ),
-                      child: Text(
-                        "-${discountPercentage.toStringAsFixed(0)}%",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 10,
+                      child: IconButton(
+                        constraints: BoxConstraints(
+                          minHeight: 32,
+                          minWidth: 32,
                         ),
+                        iconSize: 18,
+                        padding: EdgeInsets.zero,
+                        icon: Icon(
+                          isWishlisted ? Icons.favorite : Icons.favorite_border,
+                          color: isWishlisted ? Colors.red : Colors.grey[600],
+                        ),
+                        onPressed: () {
+                          if (isWishlisted) {
+                            wishlistProvider.removeFromWishlist(productId);
+                          } else {
+                            wishlistProvider.addToWishlist(product);
+                          }
+                        },
                       ),
                     ),
-                  ),
-              ],
-            ),
-
-            // Product Details section
-            Padding(
-              padding: EdgeInsets.fromLTRB(8, 8, 8, 2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Product Name
-                  Text(
-                    productName,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey[800],
-                      height: 1.2,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-
-                  SizedBox(height: 2),
-
-                  // Price Display
-                  Row(
-                    children: [
-                      Text(
-                        "₹${price.toInt()}",
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[900],
-                        ),
-                      ),
-                      if (hasDiscount) ...[
-                        SizedBox(width: 4),
-                        Text(
-                          "₹${regularPrice.toInt()}",
-                          style: TextStyle(
-                            fontSize: 11,
-                            decoration: TextDecoration.lineThrough,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-
-                  SizedBox(height: 4),
-
-                  // Stock status and Add to Cart row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Stock Status
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: inStock ? Colors.green[50] : Colors.red[50],
-                          border: Border.all(
-                            color:
-                                inStock ? Colors.green[300]! : Colors.red[300]!,
-                            width: 1,
-                          ),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                        child: Text(
-                          inStock ? "In stock" : "Out of stock",
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w500,
-                            color:
-                                inStock ? Colors.green[700] : Colors.red[700],
-                          ),
-                        ),
-                      ),
-
-                      // Add to Cart Button
-                      GestureDetector(
-                        onTap:
-                            inStock ? () => _addToCart(context, product) : null,
-                        child: Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color:
-                                inStock ? Colors.teal[600] : Colors.grey[300],
-                            borderRadius: BorderRadius.circular(2),
-                            boxShadow:
-                                inStock
-                                    ? [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.1),
-                                        blurRadius: 1,
-                                        offset: Offset(0, 1),
-                                      ),
-                                    ]
-                                    : null,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.add_shopping_cart,
-                                color: Colors.white,
-                                size: 12,
-                              ),
-                              SizedBox(width: 2),
-                              Text(
-                                "Add",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
-            ),
-          ],
+
+              // Product Details section with enhanced styling
+              Padding(
+                padding: EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Product Name with better typography
+                    Text(
+                      productName,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[800],
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+
+                    SizedBox(height: 6),
+
+                    // Price Display with improved visual hierarchy
+                    Row(
+                      children: [
+                        Text(
+                          "₹${price.toInt()}",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: primaryColor,
+                          ),
+                        ),
+                        if (hasDiscount) ...
+                        [
+                          SizedBox(width: 6),
+                          Text(
+                            "₹${regularPrice.toInt()}",
+                            style: TextStyle(
+                              fontSize: 12,
+                              decoration: TextDecoration.lineThrough,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+
+                    SizedBox(height: 10),
+
+                    // Stock status and Add to Cart row with improved UI
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Stock Status chip with better styling
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: inStock ? Colors.green[50] : Colors.red[50],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            inStock ? "In stock" : "Out of stock",
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: inStock ? Colors.green[700] : Colors.red[700],
+                            ),
+                          ),
+                        ),
+
+                        // Add to Cart Button with improved styling
+                        GestureDetector(
+                          onTap: inStock ? () => _addToCart(context, product) : null,
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: inStock ? primaryColor : Colors.grey[300],
+                              borderRadius: BorderRadius.circular(8),
+                              boxShadow: inStock
+                                  ? [
+                                      BoxShadow(
+                                        color: primaryColor.withOpacity(0.3),
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.shopping_cart_outlined,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  "Add",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
