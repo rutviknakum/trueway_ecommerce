@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Helper class to handle iOS local network permission requests
@@ -42,58 +44,135 @@ class NetworkPermissionHelper {
     if (_hasTriggeredDialog) return;
     _hasTriggeredDialog = true;
     
-    // First approach: Bind to localhost with different ports
-    await _tryBindToLocalhost();
+    debugPrint('Attempting to trigger iOS local network permission dialog...');
     
-    // Second approach: Try to establish connection to our own socket
-    await _tryConnectToLocalhost();
+    // Make multiple attempts with a small delay between them
+    for (int i = 0; i < 3; i++) {
+      debugPrint('Attempt ${i+1} to trigger permission dialog');
+      
+      // Try to request location permission first to ensure system is ready
+      if (i == 0) {
+        debugPrint('Requesting location permission to prime system dialogs');
+        await Permission.locationWhenInUse.request();
+        // Give iOS time to process the permission request
+        await Future.delayed(const Duration(seconds: 1));
+      }
+      
+      // First approach: Bind to localhost with different ports
+      final bindSuccess = await _tryBindToLocalhost();
+      
+      // Second approach: Try to establish connection to our own socket
+      if (!bindSuccess) {
+        final connectSuccess = await _tryConnectToLocalhost();
+        if (connectSuccess) break;
+      } else {
+        break;
+      }
+      
+      // Wait between attempts
+      await Future.delayed(const Duration(seconds: 1));
+    }
+    
+    // Give time for the dialog to appear
+    await Future.delayed(const Duration(seconds: 2));
   }
 
   /// Try to bind to localhost on multiple ports to trigger the permission dialog
-  static Future<void> _tryBindToLocalhost() async {
+  static Future<bool> _tryBindToLocalhost() async {
     // Try multiple ports in case some are already in use
-    final ports = [12345, 54321, 8123, 8124, 0];
+    final ports = [12345, 54321, 8123, 8124, 8080, 9090, 0];
     
     for (final port in ports) {
       try {
         debugPrint('Attempting to bind to localhost:$port to trigger network permission dialog');
-        final socket = await ServerSocket.bind('localhost', port, shared: true);
         
-        // Wait a moment for the dialog to appear
-        await Future.delayed(const Duration(milliseconds: 500));
+        // Use a longer timeout for binding operations
+        final socket = await ServerSocket.bind(
+          'localhost', 
+          port, 
+          shared: true
+        ).timeout(const Duration(seconds: 5), onTimeout: () {
+          debugPrint('Binding timed out for port $port');
+          throw TimeoutException('Binding timed out');
+        });
+        
+        // Keep the socket open a bit longer to ensure dialog appears
+        await Future.delayed(const Duration(seconds: 1));
+        
+        // Try to accept connections to make the dialog more likely to appear
+        socket.listen((client) {
+          debugPrint('Received connection on localhost:${socket.port}');
+          client.close();
+        });
+        
+        // Keep socket open a bit longer
+        await Future.delayed(const Duration(seconds: 1));
         
         await socket.close();
         debugPrint('Successfully bound to localhost:${socket.port}');
-        return; // Success, no need to try other ports
+        return true; // Success
       } catch (e) {
         debugPrint('Failed to bind to localhost:$port - $e');
         // Continue to the next port
       }
     }
+    
+    return false; // No successful binding
   }
 
   /// Try to connect to localhost to trigger the permission dialog
-  static Future<void> _tryConnectToLocalhost() async {
+  static Future<bool> _tryConnectToLocalhost() async {
+    ServerSocket? server;
+    Socket? socket;
+    
     try {
       // Create a temporary server socket
-      final server = await ServerSocket.bind('localhost', 0);
+      server = await ServerSocket.bind('localhost', 0, shared: true)
+          .timeout(const Duration(seconds: 5), onTimeout: () {
+        throw TimeoutException('Server socket binding timed out');
+      });
       final port = server.port;
       
       debugPrint('Created server on port $port, now trying to connect to it');
       
+      // Setup the server to accept connections
+      final completer = Completer<void>();
+      server.listen((client) {
+        debugPrint('Accepted connection from client');
+        client.listen(
+          (data) => debugPrint('Received data: ${String.fromCharCodes(data)}'),
+          onDone: () => debugPrint('Client disconnected')
+        );
+        if (!completer.isCompleted) completer.complete();
+      });
+      
       // Try to connect to our own server
-      final socket = await Socket.connect('localhost', port);
+      socket = await Socket.connect('localhost', port)
+          .timeout(const Duration(seconds: 5), onTimeout: () {
+        throw TimeoutException('Connection attempt timed out');
+      });
       
-      // Wait a moment for the dialog to appear
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Send some data to make the connection more active
+      socket.add('Hello from client'.codeUnits);
       
-      // Clean up
-      await socket.close();
-      await server.close();
+      // Wait for the server to process the connection
+      await completer.future.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => debugPrint('Waiting for server connection timed out')
+      );
+      
+      // Wait longer for the dialog to appear
+      await Future.delayed(const Duration(seconds: 2));
       
       debugPrint('Successfully connected to localhost:$port');
+      return true;
     } catch (e) {
       debugPrint('Failed to connect to localhost - $e');
+      return false;
+    } finally {
+      // Clean up
+      socket?.destroy();
+      server?.close();
     }
   }
   
